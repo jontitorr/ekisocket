@@ -1,0 +1,20 @@
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/lib")
+
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+
+# Export all symbols when building a shared library
+if(BUILD_SHARED_LIBS)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+endif()
+
+find_program(CCACHE_FOUND ccache)
+
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+endif()
