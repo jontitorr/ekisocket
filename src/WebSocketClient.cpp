@@ -8,7 +8,8 @@
 #include <thread>
 
 namespace {
-constexpr std::chrono::seconds HEARTBEAT_INTERVAL { 30 }; // seconds
+constexpr std::chrono::seconds HEARTBEAT_INTERVAL { 30 };
+constexpr std::chrono::minutes TIMEOUT_INTERVAL { 2 };
 constexpr uint8_t MAX_HEADER_LENGTH { 14 };
 /**
  * @brief Represents a WebSocket Data Frame. This is what is sent between the client and server. Some of the following fields have been included for being correct, but left out as they are not needed/used.
@@ -136,6 +137,7 @@ struct Client::Impl : http::Client {
         if (const auto status = m_status.load(); status == Status::CLOSING || status == Status::CLOSED) {
             return;
         }
+
         m_status = Status::CLOSING;
 
         // The message to send with this frame is the close code occupies 2 bytes, and the reason for closing can occupy the rest.
@@ -181,11 +183,13 @@ private:
         };
 
         const auto res = http::Client::get(m_uri.to_string(), headers);
+
         if (res.status_code != 101) {
             return false;
         }
 
         const auto& r_headers = res.headers;
+
         if (!r_headers.contains("Upgrade") || !util::iequals(r_headers.at("Upgrade"), "websocket")) {
             return false;
         }
@@ -354,9 +358,11 @@ private:
             auto needed = f.payload_start - data.length();
             do {
                 const auto next_message = ssl().receive(needed);
+
                 if (next_message.empty()) {
                     continue;
                 }
+
                 data += next_message;
                 needed -= next_message.length();
             } while (needed > 0);
@@ -397,9 +403,11 @@ private:
             auto needed = expected_payload_len - actual_payload_len;
             do {
                 const auto next_message = ssl().receive(needed);
+
                 if (next_message.empty()) {
                     continue;
                 }
+
                 data += next_message;
                 needed -= next_message.length();
             } while (needed > 0);
@@ -439,6 +447,7 @@ private:
                 // We need to unmask the payload.
                 mask_payload(payload_data, f.masking_key);
             }
+
             // Echo the payload back to the client.
             send_data(Opcode::PONG, payload_data);
             dispatch.data = std::move(payload_data);
@@ -466,6 +475,7 @@ private:
                 //* Anything past the two bytes is to be considered a UTF-8 encoded string denoting the reason for closing.
                 m_close_message->data = payload_data.substr(2);
             }
+
             close();
             break;
         }
@@ -513,13 +523,11 @@ private:
         {
             // Check if we should close the connection.
             std::unique_lock lk { m_mtx };
-            if ((m_close_flags.client && m_close_flags.server) || (m_close_flags.client && std::chrono::steady_clock::now() > m_close_timeout) || !ssl().connected()) {
-                std::optional<Message> close_message {};
-                if (m_close_message.has_value()) {
-                    close_message.swap(m_close_message);
-                }
+            std::string reason {};
+
+            if ((m_close_flags.client && m_close_flags.server && !reason.append("Mutual disconnection.").empty()) || (m_close_flags.client && std::chrono::steady_clock::now() > m_close_timeout && !reason.append("Connection closed because server took too long to send close frame.").empty()) || (!ssl().connected() && !reason.append("No longer connected to the socket.").empty())) {
                 lk.unlock();
-                return disconnect(close_message.value_or(Message {}));
+                return disconnect(m_close_message.value_or(Message { .type = Opcode::CLOSE, .data = reason }));
             }
         }
 
@@ -532,15 +540,15 @@ private:
                 m_write_buffer.pop();
 
                 auto sent = ssl().send(message);
+
                 while (sent < message.length()) {
                     sent += ssl().send(std::string_view { message }.substr(sent));
                 }
-
                 // If that message was a close frame, empty the rest of the write buffer.
                 if ((static_cast<std::byte>(message[0]) & std::byte { 0xF }) == static_cast<std::byte>(Opcode::CLOSE)) {
                     m_close_flags.client = 1;
                     // Start counting the timer, although we haven't sent the CLOSE frame yet.
-                    m_close_timeout = std::chrono::steady_clock::now() + std::chrono::minutes(2);
+                    m_close_timeout = std::chrono::steady_clock::now() + TIMEOUT_INTERVAL;
                     m_write_buffer = {};
                 }
                 // If the message was our heartbeat, notify the thread.
