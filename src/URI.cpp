@@ -54,6 +54,21 @@ URI URI::parse(const std::string& uri)
     return u;
 }
 
+void URI::add_query_parameter(const std::string& key, const std::string& value)
+{
+    if (!query.empty()) {
+        query += '&';
+    }
+    query += fmt::format("{}={}", key, value);
+}
+
+void URI::add_query_parameters(const QueryParams& params)
+{
+    for (const auto& [key, value] : params) {
+        add_query_parameter(key, value);
+    }
+}
+
 std::string URI::to_string() const
 {
     std::string str = fmt::format("{}://", scheme);
@@ -106,7 +121,8 @@ bool URI::parse_scheme(const std::string& str)
     }
 
     scheme = str.substr(0, scheme_end);
-    std::ranges::transform(scheme, scheme.begin(), [](uint8_t c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(
+        scheme.begin(), scheme.end(), scheme.begin(), [](uint8_t c) { return static_cast<char>(std::tolower(c)); });
     return true;
 }
 

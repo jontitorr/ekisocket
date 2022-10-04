@@ -12,7 +12,8 @@ constexpr std::chrono::seconds HEARTBEAT_INTERVAL { 30 };
 constexpr std::chrono::minutes TIMEOUT_INTERVAL { 2 };
 constexpr uint8_t MAX_HEADER_LENGTH { 14 };
 /**
- * @brief Represents a WebSocket Data Frame. This is what is sent between the client and server. Some of the following fields have been included for being correct, but left out as they are not needed/used.
+ * @brief Represents a WebSocket Data Frame. This is what is sent between the client and server. Some of the following
+ * fields have been included for being correct, but left out as they are not needed/used.
  */
 struct WSFrame {
     unsigned char fin : 1;
@@ -36,7 +37,8 @@ void mask_payload(std::string& payload, uint32_t masking_key, uint8_t start = 0)
         // If j is 1, it represents the masking_key shifted by 16 bits (Octet 1).
         // If j is 2, it represents the masking_key shifted by 8 bits (Octet 2).
         // If j is 3, it represents the masking_key shifted by 0 bits (Octet 3).
-        *(reinterpret_cast<std::byte*>(&payload[start + i])) ^= std::byte { static_cast<uint8_t>((masking_key >> (24 - (j * 8))) & 0xFF) };
+        *(reinterpret_cast<std::byte*>(&payload[start + i]))
+            ^= std::byte { static_cast<uint8_t>((masking_key >> (24 - (j * 8))) & 0xFF) };
     }
 }
 } // namespace
@@ -63,10 +65,7 @@ struct Client::Impl : http::Client {
         }
     }
 
-    bool get_automatic_reconnect() const
-    {
-        return m_reconnect.load();
-    }
+    bool get_automatic_reconnect() const { return m_reconnect.load(); }
 
     const std::string& get_url() const
     {
@@ -74,10 +73,7 @@ struct Client::Impl : http::Client {
         return m_url;
     }
 
-    void set_automatic_reconnect(bool reconnect)
-    {
-        m_reconnect = reconnect;
-    }
+    void set_automatic_reconnect(bool reconnect) { m_reconnect = reconnect; }
 
     void set_on_message(const MessageCallback& cb)
     {
@@ -91,10 +87,7 @@ struct Client::Impl : http::Client {
         m_url = url;
     }
 
-    bool send(std::string_view message)
-    {
-        return send_data(Opcode::TEXT, message);
-    }
+    bool send(std::string_view message) { return send_data(Opcode::TEXT, message); }
 
     void start()
     {
@@ -103,7 +96,8 @@ struct Client::Impl : http::Client {
                 return;
             }
 
-            // When we are connected, we want to start sending heartbeats, so we can be notified when the connection is closed.
+            // When we are connected, we want to start sending heartbeats, so we can be notified when the connection is
+            // closed.
             std::jthread heartbeat_thread(&Impl::heartbeat, this);
             // We also want to continuously read messages, so we can dispatch them to the m_on_message callback.
             std::jthread read_thread(&Impl::read, this);
@@ -140,7 +134,8 @@ struct Client::Impl : http::Client {
 
         m_status = Status::CLOSING;
 
-        // The message to send with this frame is the close code occupies 2 bytes, and the reason for closing can occupy the rest.
+        // The message to send with this frame is the close code occupies 2 bytes, and the reason for closing can occupy
+        // the rest.
         std::string data {};
         data.reserve(2 + reason.length());
         data.push_back(static_cast<char>(code >> 8));
@@ -175,12 +170,8 @@ private:
 
         // Random 16 byte value that looks like it was encoded into base64.
         const auto key = util::get_random_base64_from(16);
-        const http::Headers headers {
-            { "Connection", "Upgrade" },
-            { "Upgrade", "websocket" },
-            { "Sec-WebSocket-Version", "13" },
-            { "Sec-WebSocket-Key", key }
-        };
+        const http::Headers headers { { "Connection", "Upgrade" }, { "Upgrade", "websocket" },
+            { "Sec-WebSocket-Version", "13" }, { "Sec-WebSocket-Key", key } };
 
         const auto res = http::Client::get(m_uri.to_string(), headers);
 
@@ -196,15 +187,18 @@ private:
         if (!r_headers.contains("Connection") || !util::iequals(r_headers.at("Connection"), "Upgrade")) {
             return false;
         }
-        if (!r_headers.contains("Sec-WebSocket-Accept") || r_headers.at("Sec-WebSocket-Accept") != util::compute_accept(key)) {
+        if (!r_headers.contains("Sec-WebSocket-Accept")
+            || r_headers.at("Sec-WebSocket-Accept") != util::compute_accept(key)) {
             return false;
         }
 
         m_status = Status::OPEN;
         return true;
     }
+
     /**
-     * @brief Disconnects from the endpoint. This will disconnect from the server with no notification and should be done when either the server is unreachable or the client is closing.
+     * @brief Disconnects from the endpoint. This will disconnect from the server with no notification and should be
+     * done when either the server is unreachable or the client is closing.
      */
     void disconnect(const Message& close_message)
     {
@@ -238,8 +232,10 @@ private:
         m_read_flag.clear();
         m_read_flag.notify_one();
     }
+
     /**
-     * @brief Sends payload data to the server parsed as a WebSocket frame. The opcode must be provided so as to express the type of data being sent.
+     * @brief Sends payload data to the server parsed as a WebSocket frame. The opcode must be provided so as to express
+     * the type of data being sent.
      *
      * @param opcode The opcode of the WebSocket frame.
      * @param message The payload data to send.
@@ -310,6 +306,7 @@ private:
         m_activity_flag.notify_one();
         return true;
     }
+
     /**
      * @brief Parses incoming frame data from the server as a WebSocket frame.
      *
@@ -317,7 +314,8 @@ private:
      */
     void process_data(std::string& data)
     {
-        // Because of the edge case of the first frame being so big it takes most of the buffer, having an incomplete (less than 2 bytes) frame remaining, we have to check if there's a leftover byte.
+        // Because of the edge case of the first frame being so big it takes most of the buffer, having an incomplete
+        // (less than 2 bytes) frame remaining, we have to check if there's a leftover byte.
         if (m_leftover_byte) {
             data.insert(0, 1, static_cast<char>(m_leftover_byte.value()));
             m_leftover_byte = std::nullopt;
@@ -393,11 +391,13 @@ private:
             f.masking_key |= static_cast<uint32_t>(static_cast<uint8_t>(data[f.payload_start + 3]));
         }
 
-        // Corresponds to the length of the frame received, which can contain more than just the payload. For example, parts of another frame.
+        // Corresponds to the length of the frame received, which can contain more than just the payload. For example,
+        // parts of another frame.
         const size_t actual_payload_len = data.length() - f.payload_start;
 
         // Our payload length can either be the extended or the normal payload length.
-        const auto expected_payload_len = static_cast<size_t>(f.ext_payload_len > 0 ? f.ext_payload_len : f.payload_len);
+        const auto expected_payload_len
+            = static_cast<size_t>(f.ext_payload_len > 0 ? f.ext_payload_len : f.payload_len);
 
         if (actual_payload_len < expected_payload_len) {
             auto needed = expected_payload_len - actual_payload_len;
@@ -469,10 +469,13 @@ private:
             // If payload data is not empty, then we received information regarding why we are closing.
             if (!payload_data.empty()) {
                 m_close_message.emplace();
-                //* MUST contain a 2-byte unsigned integer (in network byte order) representing a status code indicating the reason for closure.
-                m_close_message->code = static_cast<uint16_t>(static_cast<uint16_t>(static_cast<uint8_t>(payload_data[0])) << 8);
+                //* MUST contain a 2-byte unsigned integer (in network byte order) representing a status code indicating
+                // the reason for closure.
+                m_close_message->code
+                    = static_cast<uint16_t>(static_cast<uint16_t>(static_cast<uint8_t>(payload_data[0])) << 8U);
                 m_close_message->code |= static_cast<uint16_t>(static_cast<uint8_t>(payload_data[1]));
-                //* Anything past the two bytes is to be considered a UTF-8 encoded string denoting the reason for closing.
+                //* Anything past the two bytes is to be considered a UTF-8 encoded string denoting the reason for
+                // closing.
                 m_close_message->data = payload_data.substr(2);
             }
 
@@ -508,6 +511,7 @@ private:
             return process_data(data);
         }
     }
+
     /**
      * @brief Polls the WebSocket for new data, using the timeout specified on construction.
      */
@@ -525,7 +529,10 @@ private:
             std::unique_lock lk { m_mtx };
             std::string reason {};
 
-            if ((m_close_flags.client && m_close_flags.server && !reason.append("Mutual disconnection.").empty()) || (m_close_flags.client && std::chrono::steady_clock::now() > m_close_timeout && !reason.append("Connection closed because server took too long to send close frame.").empty()) || (!ssl().connected() && !reason.append("No longer connected to the socket.").empty())) {
+            if ((m_close_flags.client && m_close_flags.server && !reason.append("Mutual disconnection.").empty())
+                || (m_close_flags.client && std::chrono::steady_clock::now() > m_close_timeout
+                    && !reason.append("Connection closed because server took too long to send close frame.").empty())
+                || (!ssl().connected() && !reason.append("No longer connected to the socket.").empty())) {
                 lk.unlock();
                 return disconnect(m_close_message.value_or(Message { .type = Opcode::CLOSE, .data = reason }));
             }
@@ -534,7 +541,10 @@ private:
         {
             std::scoped_lock lk { m_mtx };
             while (!m_write_buffer.empty()) {
-                // Because we can have data queued ahead of our CLOSE frame in the buffer, we need to be able to cancel sending that data, since when we send the CLOSE frame, we will not be able to send any more data. We can peek at the first bytes of each of our messages in the write buffer, and look for the CLOSE frame.
+                // Because we can have data queued ahead of our CLOSE frame in the buffer, we need to be able to cancel
+                // sending that data, since when we send the CLOSE frame, we will not be able to send any more data. We
+                // can peek at the first bytes of each of our messages in the write buffer, and look for the CLOSE
+                // frame.
 
                 const auto message = std::move(m_write_buffer.front());
                 m_write_buffer.pop();
@@ -552,7 +562,8 @@ private:
                     m_write_buffer = {};
                 }
                 // If the message was our heartbeat, notify the thread.
-                else if ((static_cast<std::byte>(message[0]) & std::byte { 0xF }) == static_cast<std::byte>(Opcode::PING)) {
+                else if ((static_cast<std::byte>(message[0]) & std::byte { 0xF })
+                    == static_cast<std::byte>(Opcode::PING)) {
                     m_heartbeat_flag.clear();
                     m_heartbeat_flag.notify_one();
                 }
@@ -565,6 +576,7 @@ private:
         m_read_flag.clear();
         m_read_flag.notify_one();
     }
+
     /**
      * @brief Continuously sends heartbeats to the server (PING frames), to ensure the connection is still alive.
      */
@@ -589,6 +601,7 @@ private:
             }
         }
     }
+
     /**
      * @brief Waits until there is data to be read from the WebSocket. This is a blocking operation used for polling.
      */
@@ -634,15 +647,15 @@ private:
     /// Close timeout, in case the server does not response with a close frame in time.
     std::chrono::steady_clock::time_point m_close_timeout {};
     /// Atomic Flag for indicating whether there is network activity or not.
-    std::atomic_flag m_activity_flag {};
+    std::atomic_flag m_activity_flag = ATOMIC_FLAG_INIT;
     // Atomic Flag for the read thread to be notified when to start reading again.
-    std::atomic_flag m_read_flag {};
+    std::atomic_flag m_read_flag = ATOMIC_FLAG_INIT;
     /// Whether or not to reconnect to the server if the connection is lost (Defaults to true).
     std::atomic_bool m_reconnect { true };
     /// String representing the heartbeat message to send.
     std::string m_heartbeat_message { "--heartbeat--" };
     /// Atomic flag for the heartbeat thread to be notified when to start sending heartbeats again.
-    std::atomic_flag m_heartbeat_flag {};
+    std::atomic_flag m_heartbeat_flag = ATOMIC_FLAG_INIT;
     /// Condition variable for sleeping the heartbeat thread.
     std::condition_variable m_cv {};
     /// Number of missed heartbeats.
@@ -659,49 +672,22 @@ Client::Client(Client&&) noexcept = default;
 Client& Client::operator=(Client&&) noexcept = default;
 Client::~Client() = default;
 
-bool Client::get_automatic_reconnect() const
-{
-    return m_impl->get_automatic_reconnect();
-}
+bool Client::get_automatic_reconnect() const { return m_impl->get_automatic_reconnect(); }
 
-const std::string& Client::get_url() const
-{
-    return m_impl->get_url();
-}
+const std::string& Client::get_url() const { return m_impl->get_url(); }
 
-void Client::set_automatic_reconnect(bool reconnect) const
-{
-    return m_impl->set_automatic_reconnect(reconnect);
-}
+void Client::set_automatic_reconnect(bool reconnect) const { return m_impl->set_automatic_reconnect(reconnect); }
 
-void Client::set_on_message(const MessageCallback& cb) const
-{
-    return m_impl->set_on_message(cb);
-}
+void Client::set_on_message(const MessageCallback& cb) const { return m_impl->set_on_message(cb); }
 
-void Client::set_url(std::string_view url) const
-{
-    return m_impl->set_url(url);
-}
+void Client::set_url(std::string_view url) const { return m_impl->set_url(url); }
 
-bool Client::send(std::string_view message) const
-{
-    return m_impl->send(message);
-}
+bool Client::send(std::string_view message) const { return m_impl->send(message); }
 
-void Client::start() const
-{
-    return m_impl->start();
-}
+void Client::start() const { return m_impl->start(); }
 
-void Client::start_async() const
-{
-    return m_impl->start_async();
-}
+void Client::start_async() const { return m_impl->start_async(); }
 
-void Client::close(uint16_t code, std::string_view reason) const
-{
-    return m_impl->close(code, reason);
-}
+void Client::close(uint16_t code, std::string_view reason) const { return m_impl->close(code, reason); }
 
 } // namespace ekisocket::ws

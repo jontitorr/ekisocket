@@ -26,6 +26,9 @@ if(OpenSSL_ADDED)
         PUBLIC_HEADER DESTINATION include
     )
 else()
+    set_target_properties(
+        OpenSSL::SSL OpenSSL::Crypto PROPERTIES IMPORTED_GLOBAL TRUE
+    )
     add_library(${PROJECT_NAME}::ssl ALIAS OpenSSL::SSL)
     add_library(${PROJECT_NAME}::crypto ALIAS OpenSSL::Crypto)
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
@@ -48,6 +51,9 @@ if(fmt_ADDED)
     )
     install(DIRECTORY ${fmt_SOURCE_DIR}/include/ DESTINATION include)
 else()
+    set_target_properties(
+        fmt::fmt PROPERTIES IMPORTED_GLOBAL TRUE
+    )
     add_library(${PROJECT_NAME}::fmt ALIAS fmt::fmt)
     target_link_libraries(${PROJECT_NAME} PRIVATE fmt::fmt)
 endif()

@@ -10,7 +10,7 @@
 namespace {
 // Static Constexpr Map of all the file extension to their content type.
 using namespace std::literals::string_view_literals;
-const std::unordered_map<std::string_view, std::string_view> content_types {
+const std::unordered_map<std::string_view, std::string_view> CONTENT_TYPES {
     { "*3gpp"sv, "audio/3gpp"sv },
     { "*jpm"sv, "video/jpm"sv },
     { "*mp3"sv, "audio/mp3"sv },
@@ -359,25 +359,35 @@ const std::unordered_map<std::string_view, std::string_view> content_types {
     { "yml"sv, "text/yaml"sv },
     { "zip"sv, "application/zip"sv },
 };
-}
+} // namespace
 
 namespace ekisocket::util {
+bool CaseInsensitiveComp::operator()(std::string_view lkey, std::string_view rkey) const
+{
+    return std::lexicographical_compare(lkey.begin(), lkey.end(), rkey.begin(), rkey.end(),
+        [](const unsigned char& l, const unsigned char& r) { return std::tolower(l) < std::tolower(r); });
+}
+
 std::string base64_encode(const uint8_t* input, size_t len)
 {
     std::string encoded {};
+
     // This is how many bytes we're going to have.
     const auto total = (len % 3 == 0 ? len : (len + 3 - (len % 3))); // Ex: 12 for "Hello World".
     // This is how many bytes we have to make (subtracted from the ones we actually have).
     const auto padding = total - len; // Ex: 1 for "Hello World".
+
     // Reserving enough space. total * 4/3
     // x4 because we're going to have 4 characters for every 3 bytes.
     // x1/3 because every THREE characters.
     // Think of it as a rate of conversion. e.g. 4 characters per 3 bytes.
     encoded.reserve(total * 4 / 3);
+
     // Recording the number of bytes we have.
     uint8_t num_of_bytes {};
     // Recording the joined bytes.
     uint32_t triple {};
+
     // For every three bytes, concatenate them into 24 bits.
     for (size_t i = 0; i < total; i += 3) { // Guaranteed to pass the last triple.
         if (i + 2 < (total - padding)) {
@@ -388,7 +398,9 @@ std::string base64_encode(const uint8_t* input, size_t len)
             triple |= static_cast<uint32_t>((input[i + 1] << (8 * num_of_bytes)));
             ++num_of_bytes;
         }
-        triple |= static_cast<uint32_t>((input[i] << (8 * num_of_bytes))); // Mathematically, it is impossible for input[i] to be a padding character.
+
+        triple |= static_cast<uint32_t>((input[i]
+            << (8 * num_of_bytes))); // Mathematically, it is impossible for input[i] to be a padding character.
         ++num_of_bytes;
         encoded += encode_triple(triple, num_of_bytes * 8);
         num_of_bytes = 0;
@@ -427,8 +439,10 @@ std::string encode_triple(uint32_t triple, uint8_t num_of_bits)
 {
     uint8_t shift {};
     uint8_t chunk {};
+
     std::string result {};
     result.reserve(num_of_bits / 8);
+
     while (num_of_bits != 0) {
         // If we have more than 6 bits, we can use the last 6 bits of the triple.
         if (num_of_bits >= 6) {
@@ -442,29 +456,30 @@ std::string encode_triple(uint32_t triple, uint8_t num_of_bits)
             num_of_bits = 0;
         }
     }
+
     return result;
 }
 
 static constexpr const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-char get_base64_char(uint8_t c)
-{
-    return base64_chars[c];
-}
+char get_base64_char(uint8_t c) { return base64_chars[c]; }
 
 std::string get_random_base64_from(uint32_t source_len)
 {
     std::string ret {};
+
     // Must be rounded to a multiple of 3.
     const size_t rounded_bytes = (source_len % 3 == 0 ? source_len : (source_len + 3 - (source_len % 3)));
     // Must pad the remainder.
     const size_t padding = rounded_bytes - source_len;
     // Have to reserve the theoretical space for encoding.
     const size_t reserved_bytes = rounded_bytes * 4 / 3;
+
     ret.reserve(reserved_bytes);
     std::random_device rd {};
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint16_t> dis(0, 63);
+
     // Append the random characters.
     for (uint32_t i = 0; i < reserved_bytes - padding; ++i) {
         ret += get_base64_char(static_cast<uint8_t>(dis(gen)));
@@ -473,6 +488,7 @@ std::string get_random_base64_from(uint32_t source_len)
     for (uint32_t i = 0; i < padding; ++i) {
         ret += '=';
     }
+
     return ret;
 }
 
@@ -499,35 +515,29 @@ bool iequals(const std::string& a, const std::string& b)
 
 std::string& ltrim(std::string& s)
 {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-        return std::isspace(ch) != 0;
-    }));
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) { return std::isspace(ch) != 0; }));
     return s;
 }
 
 std::string& rtrim(std::string& s)
 {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-        return std::isspace(ch) != 0;
-    }).base(),
-        s.end());
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) { return std::isspace(ch) != 0; }).base(), s.end());
     return s;
 }
 
-std::string& trim(std::string& s)
-{
-    return ltrim(rtrim(s));
-}
+std::string& trim(std::string& s) { return ltrim(rtrim(s)); }
 
 std::vector<std::string> split(std::string_view s, std::string_view delimiter)
 {
     std::vector<std::string> ret {};
     size_t pos {};
     size_t prev {};
+
     while ((pos = s.find(delimiter, prev)) != std::string::npos) {
         ret.emplace_back(s.substr(prev, pos - prev));
         prev = pos + delimiter.length();
     }
+
     ret.emplace_back(s.substr(prev));
     return ret;
 }
@@ -535,19 +545,18 @@ std::vector<std::string> split(std::string_view s, std::string_view delimiter)
 std::string join(const std::vector<std::string>& v, std::string_view delimiter)
 {
     std::string ret {};
+
     for (size_t i = 0; i < v.size(); ++i) {
         ret += v[i];
         if (i != v.size() - 1) {
             ret += delimiter;
         }
     }
+
     return ret;
 }
 
-bool is_number(std::string_view s)
-{
-    return !s.empty() && std::ranges::all_of(s, ::isdigit);
-}
+bool is_number(std::string_view s) { return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit); }
 
 std::string create_boundary()
 {
@@ -557,30 +566,31 @@ std::string create_boundary()
     const auto rng = get_random_number(1, 70);
     std::string ret {};
     ret.reserve(rng);
+
     // 2.  Choose a random printable ASCII character.
     // The printable ASCII characters are the characters from the range 32 to 127, inclusive.
     std::random_device rd {};
     std::mt19937 gen(rd());
     std::uniform_int_distribution dis(32, 127);
+
     // 3.  Append the character to the string.
     for (size_t i = 0; i < rng; ++i) {
         ret += static_cast<char>(dis(gen));
     }
+
     return ret;
 }
 
 std::string create_multipart_form_data(const std::string& key, std::string_view value, const std::string& boundary)
 {
-    return fmt::format(
-        "--{}\r\n"
-        "Content-Disposition: form-data; name=\"{}\"\r\n"
-        "{}",
-        boundary,
-        key,
-        value);
+    return fmt::format("--{}\r\n"
+                       "Content-Disposition: form-data; name=\"{}\"\r\n"
+                       "{}",
+        boundary, key, value);
 }
 
-std::string create_multipart_form_data(const std::vector<std::pair<std::string, std::string>>& key_value_pairs, const std::string& boundary)
+std::string create_multipart_form_data(
+    const std::vector<std::pair<std::string, std::string>>& key_value_pairs, const std::string& boundary)
 {
     std::string ret {};
     for (const auto& [key, value] : key_value_pairs) {
@@ -590,27 +600,28 @@ std::string create_multipart_form_data(const std::vector<std::pair<std::string, 
     return ret;
 }
 
-std::string create_multipart_form_data_file(const std::string& name, std::string_view file_contents, const std::string& filename, const std::string& boundary)
+std::string create_multipart_form_data_file(
+    const std::string& name, std::string_view file_contents, const std::string& filename, const std::string& boundary)
 {
-    auto ret = fmt::format(
-        "--{}\r\r"
-        "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
-        boundary,
-        name,
-        filename);
+    auto ret = fmt::format("--{}\r\r"
+                           "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+        boundary, name, filename);
 
     // Determine the content type.
     const std::string_view content_type = std::invoke([&filename] {
-        std::string_view rt {};
         // If the filename has an extension. (e.g. "foo.jpg"), we can determine the content type, from that.
         const auto dot = filename.find_last_of('.');
+
         if (dot == std::string::npos) {
-            return rt = "application/octet-stream";
+            return "application/octet-stream"sv;
         }
 
         // Compare the possible extensions.
-        const auto ext = filename.substr(dot + 1);
-        return content_types.contains(ext) ? content_types.at(ext) : rt = "application/octet-stream";
+        if (const auto ext = filename.substr(dot + 1); CONTENT_TYPES.contains(ext)) {
+            return CONTENT_TYPES.at(ext);
+        }
+
+        return "application/octet-stream"sv;
     });
 
     ret += fmt::format("Content-Type: {}\r\n\r\n{}", content_type, file_contents);

@@ -41,12 +41,15 @@ public:
     EKISOCKET_EXPORT void set_port(uint16_t port) const;
     EKISOCKET_EXPORT void set_timeout(int milliseconds) const;
     EKISOCKET_EXPORT void set_use_ssl(bool use_ssl) const;
+
     /**
-     * @brief Whether or not the client should verify server certificates. This is useful if certain servers do not offer a valid certificate, or for testing purposes with self-signed certificates.
+     * @brief Whether or not the client should verify server certificates. This is useful if certain servers do not
+     * offer a valid certificate, or for testing purposes with self-signed certificates.
      *
      * @param verify Whether or not to verify server certificates.
      */
     EKISOCKET_EXPORT void set_verify_certs(bool verify) const;
+
     /**
      * @brief Connects to the given hostname and port.
      *
@@ -55,6 +58,7 @@ public:
      * @return bool Whether or not the connection was successful.
      */
     EKISOCKET_EXPORT bool connect() const;
+
     /**
      * @brief Sends data over to the server.
      *
@@ -62,12 +66,14 @@ public:
      * @return size_t The number of bytes sent.
      */
     EKISOCKET_EXPORT size_t send(std::string_view message) const;
+
     /**
      * @brief Receives data from the server.
      *
      * @return std::string The received data.
      */
     [[nodiscard]] EKISOCKET_EXPORT std::string receive(size_t buf_size = 4096) const;
+
     /**
      * @brief Calls poll() on the underlying socket to query for the availability of read/write states.
      *
@@ -77,6 +83,7 @@ public:
      * @return bool Whether or not the socket is ready for read/write.
      */
     [[nodiscard]] EKISOCKET_EXPORT bool query(bool want_read = false, bool want_write = false) const;
+
     /**
      * @brief Closes the connection to the server.
      */

@@ -2,11 +2,18 @@
 #include <cstdint>
 #include <ekisocket_export.h>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace ekisocket::util {
+struct CaseInsensitiveComp {
+    EKISOCKET_EXPORT bool operator()(std::string_view lkey, std::string_view rkey) const;
+};
+
+using CaseInsensitiveMap = std::map<std::string, std::string, CaseInsensitiveComp>;
+
 /**
  * @brief Generates a random base64 encoded string from a theoretical source length.
  *
@@ -32,7 +39,8 @@ uint32_t get_random_number(uint32_t min = 0, uint32_t max = (std::numeric_limits
 [[nodiscard]] EKISOCKET_EXPORT std::string base64_encode(const uint8_t* input, size_t len);
 [[nodiscard]] EKISOCKET_EXPORT std::string base64_encode(std::string_view input);
 /**
- * @brief Computes the "Sec-WebSocket-Accept" header found in the handshake response to a WebSocket connection, given the "Sec-WebSocket-Key" sent to the server.
+ * @brief Computes the "Sec-WebSocket-Accept" header found in the handshake response to a WebSocket connection, given
+ * the "Sec-WebSocket-Key" sent to the server.
  *
  * @param key The "Sec-WebSocket-Key" sent to the server.
  * @return std::string The computed "Sec-WebSocket-Accept" header.
@@ -70,8 +78,7 @@ std::string& trim(std::string& s);
 std::vector<std::string> split(std::string_view s, std::string_view delimiter);
 std::string join(const std::vector<std::string>& v, std::string_view delimiter);
 
-template <typename Iterator>
-std::string join(Iterator begin, Iterator end, const std::string& delimiter)
+template <typename Iterator> std::string join(Iterator begin, Iterator end, const std::string& delimiter)
 {
     std::stringstream ss {};
     for (Iterator it = begin; it != end; ++it) {
@@ -96,13 +103,17 @@ bool is_number(std::string_view s);
 [[nodiscard]] EKISOCKET_EXPORT std::string create_boundary();
 
 /// Helper function for creating multipart/form-data requests
-[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data(const std::string& key, std::string_view value, const std::string& boundary);
+[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data(
+    const std::string& key, std::string_view value, const std::string& boundary);
 
 /// Helper function for creating multipart/form-data requests with multiple key/value pairs
-[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data(const std::vector<std::pair<std::string, std::string>>& key_value_pairs, const std::string& boundary);
+[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data(
+    const std::vector<std::pair<std::string, std::string>>& key_value_pairs, const std::string& boundary);
 
-[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data_file(const std::string& name, std::string_view file_contents, const std::string& filename, const std::string& boundary);
+[[nodiscard]] EKISOCKET_EXPORT std::string create_multipart_form_data_file(
+    const std::string& name, std::string_view file_contents, const std::string& filename, const std::string& boundary);
 
 /// Helper function for creating application/x-www-form-urlencoded requests
-[[nodiscard]] EKISOCKET_EXPORT std::string create_application_x_www_form_urlencoded(const std::string& key, const std::string& value);
+[[nodiscard]] EKISOCKET_EXPORT std::string create_application_x_www_form_urlencoded(
+    const std::string& key, const std::string& value);
 } // namespace ekisocket::util

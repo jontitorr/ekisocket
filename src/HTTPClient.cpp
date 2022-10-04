@@ -9,12 +9,6 @@ constexpr uint16_t HTTPS_PORT = 443;
 } // namespace
 
 namespace ekisocket::http {
-bool CaseInsensitiveComp::operator()(std::string_view lkey, std::string_view rkey) const
-{
-    return std::ranges::lexicographical_compare(lkey, rkey, [](const unsigned char& l, const unsigned char& r) {
-        return tolower(l) < tolower(r);
-    });
-}
 struct Client::Impl : ssl::Client {
     explicit Impl()
         : ssl::Client({}, {})
@@ -31,9 +25,11 @@ struct Client::Impl : ssl::Client {
     DECLARE_HTTP_METHOD(trace, TRACE)
     DECLARE_HTTP_METHOD(patch, PATCH)
 
-    Response request(const Method& method, const std::string& url, const Headers& headers, std::string_view body, bool keep_alive = false, bool stream = false, const BodyCallback& cb = {})
+    Response request(const Method& method, const std::string& url, const Headers& headers, std::string_view body,
+        bool keep_alive = false, bool stream = false, const BodyCallback& cb = {})
     {
         auto uri = URI::parse(url);
+
         if (uri.scheme.empty()) {
             uri.scheme = "http";
         }
@@ -53,7 +49,8 @@ struct Client::Impl : ssl::Client {
             ssl::Client::set_blocking(true);
             // We should have detected whether we were disconnected or not.
         }
-        if (auto requested_server = fmt::format("{}:{}", uri.host, uri.port); m_connected_to.empty() || m_connected_to != requested_server || !ssl::Client::connected()) {
+        if (auto requested_server = fmt::format("{}:{}", uri.host, uri.port);
+            m_connected_to.empty() || m_connected_to != requested_server || !ssl::Client::connected()) {
             ssl::Client::set_hostname(uri.host);
             ssl::Client::set_port(uri.port);
             ssl::Client::set_use_ssl(uri.port == HTTPS_PORT);
@@ -78,6 +75,7 @@ struct Client::Impl : ssl::Client {
 
         const auto& method_str = m_methods.at(method);
         auto line = fmt::format("{} {} {}\r\n", method_str, uri.path, "HTTP/1.1");
+
         if (uri.port == HTTP_PORT || uri.port == HTTPS_PORT) {
             line += fmt::format("Host: {}\r\n", uri.host);
         } else {
@@ -97,31 +95,31 @@ struct Client::Impl : ssl::Client {
         }
 
         line += "\r\n"; // End of headers.
-
         line += body;
 
         m_streaming = stream;
         m_body_callback = cb;
 
         auto sent = ssl::Client::send(line);
+
         while (sent < line.length()) {
             sent += ssl::Client::send(std::string_view { line }.substr(sent));
         }
+
         return receive();
     }
 
-    ssl::Client& ssl()
-    {
-        return reinterpret_cast<ssl::Client&>(*this);
-    }
+    ssl::Client& ssl() { return reinterpret_cast<ssl::Client&>(*this); }
 
 private:
     static void parse_chunked(std::string& body)
     {
         std::string new_body {};
+
         for (size_t i = 0; i < body.length(); i += 2) {
             // If we have reached the end of the chunked body, we are done.
-            if (body[i] == '0' && body[i + 1] == '\r' && body[i + 2] == '\n' && body[i + 3] == '\r' && body[i + 4] == '\n') {
+            if (body[i] == '0' && body[i + 1] == '\r' && body[i + 2] == '\n' && body[i + 3] == '\r'
+                && body[i + 4] == '\n') {
                 break;
             }
 
@@ -148,6 +146,7 @@ private:
 
         body = std::move(new_body);
     }
+
     /**
      * @brief Receives data from the server.
      *
@@ -191,12 +190,14 @@ private:
         std::string value {};
         auto j = end_of_status_line + 2; // Used for marking the beginning of our value.
         bool encoded {};
+
         for (auto i = j; i < response.length(); ++i) {
             if (response[i] != ':') {
                 continue;
             }
             // If we have a colon, we know we are at the key.
-            // We know we are at the key, so we can set the key to the string from the beginning of the response to the colon.
+            // We know we are at the key, so we can set the key to the string from the beginning of the response to the
+            // colon.
             key = response.substr(j, i - j);
             // We need to skip the colon and any spaces after it.
             while (response[i] == ':' || response[i] == ' ') {
@@ -210,7 +211,8 @@ private:
             while (response[i] != '\r' && response[i] != '\n') {
                 ++i;
             }
-            // We know we are at the end of the value, so we can set the value to the string from the beginning of the response to the CRLF.
+            // We know we are at the end of the value, so we can set the value to the string from the beginning of the
+            // response to the CRLF.
             value = response.substr(j, i - j);
             // If we received a body.
             if (util::iequals(key, "Content-Length")) {
@@ -236,6 +238,7 @@ private:
 
         while (bytes_received < content_length) {
             const auto chunk = ssl::Client::receive();
+
             if (chunk.empty()) {
                 continue;
             }
@@ -246,11 +249,13 @@ private:
                 // Otherwise, append the chunk to the body.
                 body += chunk;
             }
+
             bytes_received += chunk.length();
         }
 
         if (encoded) {
             auto end_of_chunk { body.find("0\r\n\r\n") };
+
             // If there is no end of chunk marker, we must receive until we have it.
             while (end_of_chunk == std::string::npos) {
                 const auto old_length = body.length();
@@ -276,16 +281,18 @@ private:
     BodyCallback m_body_callback {};
 };
 
-#define DEFINE_HTTP_FUNCTION(name, method)                                                                                              \
-    Response Client::name(const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb) \
-    {                                                                                                                                   \
-        return request(Method::method, url, headers, body, true, stream, cb);                                                           \
+#define DEFINE_HTTP_FUNCTION(name, method)                                                                             \
+    Response Client::name(                                                                                             \
+        const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb)  \
+    {                                                                                                                  \
+        return request(Method::method, url, headers, body, true, stream, cb);                                          \
     }
 
-#define DEFINE_OUTSIDE_FUNCTION(name, method)                                                                                   \
-    Response name(const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb) \
-    {                                                                                                                           \
-        return request(Method::method, url, headers, body, stream, cb);                                                         \
+#define DEFINE_OUTSIDE_FUNCTION(name, method)                                                                          \
+    Response name(                                                                                                     \
+        const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb)  \
+    {                                                                                                                  \
+        return request(Method::method, url, headers, body, stream, cb);                                                \
     }
 DEFINE_OUTSIDE_FUNCTION(get, GET)
 DEFINE_OUTSIDE_FUNCTION(post, POST)
@@ -297,22 +304,16 @@ DEFINE_OUTSIDE_FUNCTION(connect, CONNECT)
 DEFINE_OUTSIDE_FUNCTION(trace, TRACE)
 DEFINE_OUTSIDE_FUNCTION(patch, PATCH)
 
-Response request(const Method& method, const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb)
+Response request(const Method& method, const std::string& url, const Headers& headers, const std::string& body,
+    bool stream, const BodyCallback& cb)
 {
     return Client().request(method, url, headers, body, false, stream, cb);
 }
 
-std::unordered_map<Method, std::string> const Client::Impl::m_methods {
-    { Method::GET, "GET" },
-    { Method::POST, "POST" },
-    { Method::PUT, "PUT" },
-    { Method::DELETE_, "DELETE" },
-    { Method::HEAD, "HEAD" },
-    { Method::OPTIONS, "OPTIONS" },
-    { Method::CONNECT, "CONNECT" },
-    { Method::TRACE, "TRACE" },
-    { Method::PATCH, "PATCH" }
-};
+std::unordered_map<Method, std::string> const Client::Impl::m_methods { { Method::GET, "GET" },
+    { Method::POST, "POST" }, { Method::PUT, "PUT" }, { Method::DELETE_, "DELETE" }, { Method::HEAD, "HEAD" },
+    { Method::OPTIONS, "OPTIONS" }, { Method::CONNECT, "CONNECT" }, { Method::TRACE, "TRACE" },
+    { Method::PATCH, "PATCH" } };
 
 Client::Client()
     : m_impl { std::make_unique<Client::Impl>() }
@@ -333,13 +334,11 @@ DEFINE_HTTP_FUNCTION(connect, CONNECT)
 DEFINE_HTTP_FUNCTION(trace, TRACE)
 DEFINE_HTTP_FUNCTION(patch, PATCH)
 
-Response Client::request(const Method& method, const std::string& url, const Headers& headers, std::string_view body, bool keep_alive, bool stream, const BodyCallback& cb) const
+Response Client::request(const Method& method, const std::string& url, const Headers& headers, std::string_view body,
+    bool keep_alive, bool stream, const BodyCallback& cb) const
 {
     return m_impl->request(method, url, headers, body, keep_alive, stream, cb);
 }
 
-ssl::Client& Client::ssl() const
-{
-    return m_impl->ssl();
-}
+ssl::Client& Client::ssl() const { return m_impl->ssl(); }
 } // namespace ekisocket::http

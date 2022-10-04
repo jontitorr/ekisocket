@@ -13,7 +13,6 @@
 #ifndef _WIN32
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wuseless-cast"
 #endif
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
@@ -25,21 +24,17 @@
 #endif
 
 namespace {
-template <typename T>
-struct DeleterOf;
+template <typename T> struct DeleterOf;
 
-template <>
-struct DeleterOf<BIO> {
+template <> struct DeleterOf<BIO> {
     void operator()(BIO* p) const { BIO_free_all(p); }
 };
 
-template <>
-struct DeleterOf<SSL_CTX> {
+template <> struct DeleterOf<SSL_CTX> {
     void operator()(SSL_CTX* p) const { SSL_CTX_free(p); }
 };
 
-template <typename OpenSSLType>
-using UniqueSSLPtr = std::unique_ptr<OpenSSLType, DeleterOf<OpenSSLType>>;
+template <typename OpenSSLType> using UniqueSSLPtr = std::unique_ptr<OpenSSLType, DeleterOf<OpenSSLType>>;
 
 UniqueSSLPtr<BIO> operator|(UniqueSSLPtr<BIO>& lower, UniqueSSLPtr<BIO>&& upper)
 {
@@ -52,13 +47,8 @@ std::string get_errno_string()
     std::string ret {};
 #ifdef _WIN32
     ret.resize(256);
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        nullptr,
-        socketerrno,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        ret.data(),
-        static_cast<DWORD>(ret.size()),
-        nullptr);
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, socketerrno,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), ret.data(), static_cast<DWORD>(ret.size()), nullptr);
 
     if (ret.empty()) {
         ret = std::to_string(socketerrno);
@@ -84,12 +74,10 @@ std::string get_errno_string()
 #pragma GCC diagnostic pop
 #endif
     std::string err_str(buf, static_cast<size_t>(len));
-    const auto combined_msg = fmt::format(
-        "{}\n"
-        "{}"
-        "{}",
-        message,
-        use_ssl ? fmt::format("OpenSSL Error: {}\n", err_str) : "",
+    const auto combined_msg = fmt::format("{}\n"
+                                          "{}"
+                                          "{}",
+        message, use_ssl ? fmt::format("OpenSSL Error: {}\n", err_str) : "",
         print_errno ? fmt::format("Socket Error: {}\n", get_errno_string()) : "");
 
     throw ekisocket::errors::SSLClientError(combined_msg);
@@ -127,7 +115,8 @@ bool load_windows_certificates(const SSL_CTX* ssl)
 
     uint32_t count {};
     while ((it = CertEnumCertificatesInStore(system_store, it)) != nullptr) {
-        X509* x509 = d2i_X509(nullptr, const_cast<const unsigned char**>(&it->pbCertEncoded), static_cast<int32_t>(it->cbCertEncoded));
+        X509* x509 = d2i_X509(
+            nullptr, const_cast<const unsigned char**>(&it->pbCertEncoded), static_cast<int32_t>(it->cbCertEncoded));
         if (x509 != nullptr) {
             if (X509_STORE_add_cert(ssl_store, x509) == 1) {
                 ++count;
@@ -222,7 +211,7 @@ struct Client::Impl {
     [[nodiscard]] socket_t socket() const
     {
         std::scoped_lock lk { m_mtx };
-        return m_context->sfd.load();
+        return m_context.sfd.load();
     }
 
     [[nodiscard]] int timeout() const
@@ -231,10 +220,7 @@ struct Client::Impl {
         return m_timeout.load();
     }
 
-    void set_blocking(bool blocking)
-    {
-        m_timeout.store(blocking ? -1 : 0);
-    }
+    void set_blocking(bool blocking) { m_timeout.store(blocking ? -1 : 0); }
 
     void set_hostname(std::string hostname)
     {
@@ -275,13 +261,17 @@ struct Client::Impl {
         }
 
         const auto host_and_port = fmt::format("{}:{}", m_hostname, m_port);
-
         BIO_ADDRINFO* res {};
-        if (BIO_lookup_ex(m_hostname.c_str(), std::to_string(m_port).c_str(), BIO_LOOKUP_CLIENT, AF_INET, m_use_udp ? SOCK_DGRAM : SOCK_STREAM, m_use_udp ? IPPROTO_UDP : IPPROTO_TCP, &res) == 0) {
+
+        if (BIO_lookup_ex(m_hostname.c_str(), std::to_string(m_port).c_str(), BIO_LOOKUP_CLIENT, AF_INET,
+                m_use_udp ? SOCK_DGRAM : SOCK_STREAM, m_use_udp ? IPPROTO_UDP : IPPROTO_TCP, &res)
+            == 0) {
             print_errors_and_throw("Unable to lookup address.", m_use_ssl);
         }
         for (const BIO_ADDRINFO* ai = res; ai != nullptr; ai = BIO_ADDRINFO_next(ai)) {
-            const auto sfd = BIO_socket(BIO_ADDRINFO_family(ai), BIO_ADDRINFO_socktype(ai), BIO_ADDRINFO_protocol(ai), 0);
+            const auto sfd
+                = BIO_socket(BIO_ADDRINFO_family(ai), BIO_ADDRINFO_socktype(ai), BIO_ADDRINFO_protocol(ai), 0);
+
             if (sfd == INVALID_SOCKET) {
                 continue;
             }
@@ -292,7 +282,10 @@ struct Client::Impl {
 #else
 #define SOCKET_ERRNO_CONDITION (socketerrno == EINPROGRESS || socketerrno == EWOULDBLOCK)
 #endif
-            if (BIO_connect(sfd, BIO_ADDRINFO_address(ai), m_use_udp ? BIO_SOCK_NONBLOCK : BIO_SOCK_NODELAY | BIO_SOCK_NONBLOCK) == 0 && !(SOCKET_ERRNO_CONDITION || socketerrno == 0)) {
+            if (BIO_connect(
+                    sfd, BIO_ADDRINFO_address(ai), m_use_udp ? BIO_SOCK_NONBLOCK : BIO_SOCK_NODELAY | BIO_SOCK_NONBLOCK)
+                    == 0
+                && !(SOCKET_ERRNO_CONDITION || socketerrno == 0)) {
                 BIO_closesocket(sfd);
                 continue;
             }
@@ -300,12 +293,12 @@ struct Client::Impl {
                 print_errors_and_throw("Unable to connect to host.", m_use_ssl);
             }
 
-            m_context->bio = UniqueSSLPtr<BIO>(BIO_new_socket(sfd, BIO_CLOSE));
-            m_context->sfd.store(sfd);
+            m_context.bio = UniqueSSLPtr<BIO>(BIO_new_socket(sfd, BIO_CLOSE));
+            m_context.sfd.store(sfd);
             BIO_ADDRINFO_free(res);
             break;
         }
-        if (!m_context->bio) {
+        if (!m_context.bio) {
             print_errors_and_throw("Error creating BIO.", m_use_ssl);
         }
 
@@ -327,7 +320,7 @@ struct Client::Impl {
             socket_t optval {};
 #define OPTVAL (&optval)
 #endif
-            if (getsockopt(m_context->sfd.load(), SOL_SOCKET, SO_ERROR, OPTVAL, &optlen) == -1) {
+            if (getsockopt(m_context.sfd.load(), SOL_SOCKET, SO_ERROR, OPTVAL, &optlen) == -1) {
                 print_errors_and_throw("Unable to get socket options.", m_use_ssl);
             }
             if (optval != 0) {
@@ -347,16 +340,16 @@ struct Client::Impl {
 
         if (m_use_ssl) {
             create_context();
-            if (auto ret = BIO_do_connect(m_context->bio.get()); ret <= 0) {
-                if (!BIO_should_retry(m_context->bio.get())) {
+            if (auto ret = BIO_do_connect(m_context.bio.get()); ret <= 0) {
+                if (!BIO_should_retry(m_context.bio.get())) {
                     print_errors_and_throw("Unable to connect to host.", m_use_ssl);
                 }
                 do {
-                    ret = BIO_do_connect(m_context->bio.get());
+                    ret = BIO_do_connect(m_context.bio.get());
                 } while (ret != 1);
             }
             if (m_verify_certs) {
-                verify_the_certificate(get_ssl(m_context->bio.get()), m_hostname);
+                verify_the_certificate(get_ssl(m_context.bio.get()), m_hostname);
             }
         }
         return true;
@@ -364,20 +357,19 @@ struct Client::Impl {
 
     size_t send(std::string_view message)
     {
-        // If the length of our message is greater than the max value of an int, we cannot guarantee that we can send it all.
+        // If the length of our message is greater than the max value of an int, we cannot guarantee that we can send it
+        // all.
         if (message.length() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
             throw errors::SSLClientError("Message too long to send. Please split it into smaller messages.");
-        }
-        if (!m_context) {
-            print_errors_and_throw("Context is not initialized", m_use_ssl);
         }
         if (!m_connected) {
             print_errors_and_throw("Not connected.", m_use_ssl);
         }
 
-        const auto ret = BIO_write(m_context->bio.get(), message.data(), static_cast<int>(message.length()));
+        const auto ret = BIO_write(m_context.bio.get(), message.data(), static_cast<int>(message.length()));
+
         if (ret <= 0) {
-            if (BIO_should_retry(m_context->bio.get())) {
+            if (BIO_should_retry(m_context.bio.get())) {
                 return 0;
             }
             m_connected = false;
@@ -387,7 +379,7 @@ struct Client::Impl {
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wunused-value"
 #endif
-        BIO_flush(m_context->bio.get());
+        BIO_flush(m_context.bio.get());
 #ifndef _WIN32
 #pragma GCC diagnostic pop
 #endif
@@ -399,26 +391,24 @@ struct Client::Impl {
         if (buf_size > static_cast<size_t>((std::numeric_limits<int>::max)())) {
             throw errors::SSLClientError("Buffer size too large to receive. Please split it into smaller buffers.");
         }
-        if (!m_context) {
-            print_errors_and_throw("No SSL context.", m_use_ssl);
-        }
         if (!m_connected) {
             print_errors_and_throw("Not connected.", m_use_ssl);
         }
 
-        auto* bio = m_context->bio.get();
+        auto* bio = m_context.bio.get();
         if (bio == nullptr) {
             print_errors_and_throw("Could not retrieve the underlying socket BIO.", m_use_ssl);
         }
 
         std::string buffer(buf_size, '\0');
         const auto len = BIO_read(bio, buffer.data(), static_cast<int>(buf_size));
-        if (len == 0 && !BIO_should_retry(m_context->bio.get())) {
+
+        if (len == 0 && !BIO_should_retry(m_context.bio.get())) {
             m_connected = false;
             return "";
         }
         if (len <= 0) {
-            if (BIO_should_retry(m_context->bio.get())) {
+            if (BIO_should_retry(m_context.bio.get())) {
                 return "";
             }
             print_errors_and_throw("Error receiving data.", m_use_ssl);
@@ -430,11 +420,13 @@ struct Client::Impl {
 
     [[nodiscard]] bool query(bool want_read = false, bool want_write = false) const
     {
-        if (!m_context.has_value() || m_context->sfd.load() == INVALID_SOCKET) {
+        if (!m_context.bio || m_context.sfd.load() == INVALID_SOCKET) {
             return false;
         }
-        const auto sfd = m_context->sfd.load();
+
+        const auto sfd = m_context.sfd.load();
         pollfd pfd { .fd = sfd, .events = 0, .revents = 0 };
+
         if (want_read) {
             pfd.events |= POLLIN;
         }
@@ -444,7 +436,10 @@ struct Client::Impl {
         if (const auto ret = ::poll(&pfd, 1, m_timeout.load()); ret <= 0) {
             return false;
         }
-        return (want_read == static_cast<bool>(pfd.revents & POLLIN)) && (want_write == static_cast<bool>(pfd.revents & POLLOUT)) && !static_cast<bool>(pfd.revents & (POLLNVAL | POLLERR | POLLHUP));
+
+        return (want_read == static_cast<bool>(pfd.revents & POLLIN))
+            && (want_write == static_cast<bool>(pfd.revents & POLLOUT))
+            && !static_cast<bool>(pfd.revents & (POLLNVAL | POLLERR | POLLHUP));
     }
 
     void close()
@@ -455,7 +450,7 @@ struct Client::Impl {
         }
         // If the client is TCP, we need to gracefully close the connection.
         if (!m_use_udp) {
-            auto sfd = m_context->sfd.load();
+            auto sfd = m_context.sfd.load();
 #ifdef _WIN32
             WSAEVENT event = WSACreateEvent();
             WSAEventSelect(sfd, event, FD_CLOSE);
@@ -466,6 +461,7 @@ struct Client::Impl {
 #endif
             const auto old_timeout = m_timeout.load();
             m_timeout.store(-1);
+
             while (m_connected) {
                 receive();
             }
@@ -474,7 +470,25 @@ struct Client::Impl {
 #endif
             m_timeout.store(old_timeout);
         }
-        m_context.emplace();
+
+        // Because we essentially closed the connection, we do not need the BIO to close it for us.
+        auto* bio = m_context.bio.get();
+        while (bio != nullptr) {
+#ifndef _WIN32
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+            BIO_set_close(bio, BIO_NOCLOSE);
+#ifndef _WIN32
+#pragma GCC diagnostic pop
+#endif
+
+            bio = BIO_next(bio);
+        }
+
+        m_context.bio = nullptr;
+        m_context.ctx = nullptr;
+        m_context.sfd.store(INVALID_SOCKET);
         m_connected = false;
     }
 
@@ -512,6 +526,7 @@ private:
     void create_context()
     {
         UniqueSSLPtr<SSL_CTX> ctx {};
+
         if (m_use_udp) {
             ctx = UniqueSSLPtr<SSL_CTX>(SSL_CTX_new(DTLS_client_method()));
         } else {
@@ -540,24 +555,25 @@ private:
         if (!loaded_certs) {
             print_errors_and_throw("Unable to load certificates from the system store.", true);
         }
-        m_context->ctx = std::move(ctx);
+
+        m_context.ctx = std::move(ctx);
 
         // Create a new SSL object.
-        m_context->bio = m_context->bio | UniqueSSLPtr<BIO>(BIO_new_ssl(m_context->ctx.get(), 1));
+        m_context.bio = m_context.bio | UniqueSSLPtr<BIO>(BIO_new_ssl(m_context.ctx.get(), 1));
         // Disabling retries.
-        SSL_set_mode(get_ssl(m_context->bio.get()), SSL_MODE_AUTO_RETRY);
+        SSL_set_mode(get_ssl(m_context.bio.get()), SSL_MODE_AUTO_RETRY);
 // Server Name Indication.
 #ifndef _WIN32
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
-        SSL_set_tlsext_host_name(get_ssl(m_context->bio.get()), m_hostname.c_str());
+        SSL_set_tlsext_host_name(get_ssl(m_context.bio.get()), m_hostname.c_str());
 #ifndef _WIN32
 #pragma GCC diagnostic pop
 #endif
         // Verifying the host is on the certificate.
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-        SSL_set1_host(get_ssl(m_context->bio.get()), m_hostname.c_str());
+        SSL_set1_host(get_ssl(m_context.bio.get()), m_hostname.c_str());
 #endif
     }
 
@@ -574,7 +590,7 @@ private:
     /// Whether or not the client is connected to the server.
     bool m_connected {};
     /// The underlying SSL context.
-    std::optional<SSLContext> m_context { std::in_place };
+    SSLContext m_context {};
     /// Whether or not the client should verify server certificates.
     bool m_verify_certs {};
     /// The amount of time to wait for a socket to become ready for read/write. Defaults to -1, which means blocking.
@@ -592,74 +608,32 @@ Client::Client(Client&&) noexcept = default;
 Client& Client::operator=(Client&&) noexcept = default;
 Client::~Client() = default;
 
-bool Client::connected() const
-{
-    return m_impl->connected();
-}
+bool Client::connected() const { return m_impl->connected(); }
 
-socket_t Client::socket() const
-{
-    return m_impl->socket();
-}
+socket_t Client::socket() const { return m_impl->socket(); }
 
-int Client::timeout() const
-{
-    return m_impl->timeout();
-}
+int Client::timeout() const { return m_impl->timeout(); }
 
-void Client::set_blocking(bool blocking) const
-{
-    return m_impl->set_blocking(blocking);
-}
+void Client::set_blocking(bool blocking) const { return m_impl->set_blocking(blocking); }
 
-void Client::set_hostname(std::string hostname) const
-{
-    m_impl->set_hostname(std::move(hostname));
-}
+void Client::set_hostname(std::string hostname) const { m_impl->set_hostname(std::move(hostname)); }
 
-void Client::set_port(uint16_t port) const
-{
-    m_impl->set_port(port);
-}
+void Client::set_port(uint16_t port) const { m_impl->set_port(port); }
 
-void Client::set_timeout(int milliseconds) const
-{
-    return m_impl->set_timeout(milliseconds);
-}
+void Client::set_timeout(int milliseconds) const { return m_impl->set_timeout(milliseconds); }
 
-void Client::set_use_ssl(bool use_ssl) const
-{
-    m_impl->set_use_ssl(use_ssl);
-}
+void Client::set_use_ssl(bool use_ssl) const { m_impl->set_use_ssl(use_ssl); }
 
-void Client::set_verify_certs(bool verify) const
-{
-    return m_impl->set_verify_certs(verify);
-}
+void Client::set_verify_certs(bool verify) const { return m_impl->set_verify_certs(verify); }
 
-bool Client::connect() const
-{
-    return m_impl->connect();
-}
+bool Client::connect() const { return m_impl->connect(); }
 
-size_t Client::send(std::string_view message) const
-{
-    return m_impl->send(message);
-}
+size_t Client::send(std::string_view message) const { return m_impl->send(message); }
 
-std::string Client::receive(size_t buf_size) const
-{
-    return m_impl->receive(buf_size);
-}
+std::string Client::receive(size_t buf_size) const { return m_impl->receive(buf_size); }
 
-bool Client::query(bool want_read, bool want_write) const
-{
-    return m_impl->query(want_read, want_write);
-}
+bool Client::query(bool want_read, bool want_write) const { return m_impl->query(want_read, want_write); }
 
-void Client::close() const
-{
-    return m_impl->close();
-}
+void Client::close() const { return m_impl->close(); }
 
 } // namespace ekisocket::ssl
