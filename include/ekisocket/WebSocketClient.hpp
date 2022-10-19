@@ -1,5 +1,5 @@
 #pragma once
-#include <ekisocket/HTTPClient.hpp>
+#include <ekisocket/HttpClient.hpp>
 
 namespace ekisocket::ws {
 /**

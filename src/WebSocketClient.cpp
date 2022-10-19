@@ -41,6 +41,39 @@ void mask_payload(std::string& payload, uint32_t masking_key, uint8_t start = 0)
             ^= std::byte { static_cast<uint8_t>((masking_key >> (24 - (j * 8))) & 0xFF) };
     }
 }
+
+std::string uri_to_string(ekisocket::http::Uri& uri)
+{
+    auto ret = fmt::format("{}://", uri.scheme);
+
+    if (!uri.username.empty()) {
+        ret += uri.username;
+        if (!uri.password.empty()) {
+            ret += fmt::format(":{}", uri.password);
+        }
+        ret += "@";
+    }
+
+    ret += uri.host;
+
+    if (uri.port.has_value()) {
+        ret += fmt::format(":{}", uri.port.value());
+    }
+
+    ret += uri.path;
+
+    if (!uri.query.empty()) {
+        ret += "?";
+        for (const auto& [key, value] : uri.query) {
+            ret += fmt::format("{}={}&", key, value);
+        }
+        ret.pop_back();
+    }
+    if (!uri.fragment.empty()) {
+        ret += fmt::format("#{}", uri.fragment);
+    }
+    return ret;
+}
 } // namespace
 
 namespace ekisocket::ws {
@@ -60,7 +93,7 @@ struct Client::Impl : http::Client {
         set_automatic_reconnect(false);
         try {
             close();
-        } catch (const errors::SSLClientError& e) {
+        } catch (const errors::SslClientError& e) {
             fmt::print(stderr, "Error closing WebSocket connection: {}\n", e.what());
         }
     }
@@ -126,7 +159,7 @@ struct Client::Impl : http::Client {
         m_running_thread = std::jthread(&Impl::start, this);
     }
 
-    void close(uint16_t code = 1000, std::string_view reason = "")
+    void close(uint16_t code = 1000, std::string_view reason = {})
     {
         if (const auto status = m_status.load(); status == Status::CLOSING || status == Status::CLOSED) {
             return;
@@ -159,7 +192,7 @@ private:
             throw errors::WebSocketClientError("URL not set.");
         }
 
-        m_uri = http::URI::parse(m_url);
+        m_uri = http::Uri::parse(m_url);
 
         if (m_uri.scheme != "ws" && m_uri.scheme != "wss") {
             return false;
@@ -173,7 +206,7 @@ private:
         const http::Headers headers { { "Connection", "Upgrade" }, { "Upgrade", "websocket" },
             { "Sec-WebSocket-Version", "13" }, { "Sec-WebSocket-Key", key } };
 
-        const auto res = http::Client::get(m_uri.to_string(), headers);
+        const auto res = http::Client::get(uri_to_string(m_uri), headers);
 
         if (res.status_code != 101) {
             return false;
@@ -618,7 +651,7 @@ private:
     /// The current status of the WebSocket connection.
     std::atomic<Status> m_status {};
     /// The URI of the WebSocket connection.
-    http::URI m_uri {};
+    http::Uri m_uri {};
     /// The callback function to be called when a message is received.
     MessageCallback m_on_message {};
     /// Buffer containing the data read from the WebSocket.

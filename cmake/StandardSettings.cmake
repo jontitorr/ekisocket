@@ -1,9 +1,12 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "$<0:>${CMAKE_BINARY_DIR}/lib")
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+endif()
 
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(${PROJECT_NAME}_BUILD_EXAMPLES "Build examples" ON)
+option(${PROJECT_NAME}_BUILD_TESTS "Build tests" ON)
+option(${PROJECT_NAME}_INSTALL "Generate the install target" ON)
 
 # Export all symbols when building a shared library
 if(BUILD_SHARED_LIBS)

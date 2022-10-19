@@ -2,10 +2,10 @@
 #include <stdexcept>
 
 namespace ekisocket::errors {
-struct HTTPClientError : std::runtime_error {
+struct HttpClientError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
-struct SSLClientError : std::runtime_error {
+struct SslClientError : std::runtime_error {
     using runtime_error::runtime_error;
 };
 

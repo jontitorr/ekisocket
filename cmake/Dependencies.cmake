@@ -34,7 +34,7 @@ else()
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
-cpmfindpackage(NAME fmt GITHUB_REPOSITORY "fmtlib/fmt" GIT_TAG "8.1.1")
+cpmfindpackage(NAME fmt GITHUB_REPOSITORY "fmtlib/fmt" GIT_TAG "9.1.0")
 
 if(fmt_ADDED)
     add_library(${PROJECT_NAME}::fmt ALIAS fmt)
@@ -51,9 +51,7 @@ if(fmt_ADDED)
     )
     install(DIRECTORY ${fmt_SOURCE_DIR}/include/ DESTINATION include)
 else()
-    set_target_properties(
-        fmt::fmt PROPERTIES IMPORTED_GLOBAL TRUE
-    )
+    set_target_properties(fmt::fmt PROPERTIES IMPORTED_GLOBAL TRUE)
     add_library(${PROJECT_NAME}::fmt ALIAS fmt::fmt)
     target_link_libraries(${PROJECT_NAME} PRIVATE fmt::fmt)
 endif()

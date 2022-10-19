@@ -1,13 +1,13 @@
-set(sources src/HTTPClient.cpp src/SSLClient.cpp src/URI.cpp src/Util.cpp
+set(sources src/HttpClient.cpp src/SslClient.cpp src/Uri.cpp src/Util.cpp
             src/WebSocketClient.cpp
 )
 
 set(headers
     include/ekisocket/Errors.hpp
-    include/ekisocket/HTTPClient.hpp
+    include/ekisocket/HttpClient.hpp
     include/ekisocket/Socket.hpp
-    include/ekisocket/SSLClient.hpp
-    include/ekisocket/URI.hpp
+    include/ekisocket/SslClient.hpp
+    include/ekisocket/Uri.hpp
     include/ekisocket/Util.hpp
     include/ekisocket/WebSocketClient.hpp
 )

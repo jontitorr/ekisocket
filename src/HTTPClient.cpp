@@ -1,6 +1,7 @@
 #include <algorithm>
-#include <ekisocket/HTTPClient.hpp>
+#include <ekisocket/HttpClient.hpp>
 #include <fmt/format.h>
+#include <numeric>
 #include <unordered_map>
 
 namespace {
@@ -15,28 +16,18 @@ struct Client::Impl : ssl::Client {
     {
     }
 
-    DECLARE_HTTP_METHOD(get, GET)
-    DECLARE_HTTP_METHOD(post, POST)
-    DECLARE_HTTP_METHOD(put, PUT)
-    DECLARE_HTTP_METHOD(delete_, DELETE_)
-    DECLARE_HTTP_METHOD(head, HEAD)
-    DECLARE_HTTP_METHOD(options, OPTIONS)
-    DECLARE_HTTP_METHOD(connect, CONNECT)
-    DECLARE_HTTP_METHOD(trace, TRACE)
-    DECLARE_HTTP_METHOD(patch, PATCH)
-
-    Response request(const Method& method, const std::string& url, const Headers& headers, std::string_view body,
-        bool keep_alive = false, bool stream = false, const BodyCallback& cb = {})
+    [[nodiscard]] Response request(const Method& method, std::string_view url, const Headers& headers,
+        std::string_view body, bool keep_alive = false, bool stream = false, const BodyCallback& cb = {})
     {
-        auto uri = URI::parse(url);
+        auto uri = Uri::parse(url);
 
         if (uri.scheme.empty()) {
             uri.scheme = "http";
         }
         if (!util::iequals(uri.scheme, "http") && !util::iequals(uri.scheme, "https")) {
-            throw errors::HTTPClientError(fmt::format("Invalid scheme: {}", uri.scheme));
+            throw errors::HttpClientError(fmt::format("Invalid scheme: {}", uri.scheme));
         }
-        if (uri.port == 0) {
+        if (!uri.port.has_value()) {
             uri.port = util::iequals(uri.scheme, "http") ? HTTP_PORT : HTTPS_PORT;
         }
         if (ssl::Client::connected()) {
@@ -49,25 +40,34 @@ struct Client::Impl : ssl::Client {
             ssl::Client::set_blocking(true);
             // We should have detected whether we were disconnected or not.
         }
-        if (auto requested_server = fmt::format("{}:{}", uri.host, uri.port);
+        if (auto requested_server = fmt::format("{}:{}", uri.host, uri.port.value());
             m_connected_to.empty() || m_connected_to != requested_server || !ssl::Client::connected()) {
             ssl::Client::set_hostname(uri.host);
-            ssl::Client::set_port(uri.port);
+            ssl::Client::set_port(uri.port.value());
             ssl::Client::set_use_ssl(uri.port == HTTPS_PORT);
             ssl::Client::close();
             if (!ssl::Client::connect()) {
-                throw errors::HTTPClientError(fmt::format("Failed to connect to {}:{}", uri.host, uri.port));
+                throw errors::HttpClientError(fmt::format("Failed to connect to {}:{}", uri.host, uri.port.value()));
             }
             m_connected_to = std::move(requested_server);
         }
         if (!m_methods.contains(method)) {
-            throw errors::HTTPClientError(fmt::format("Invalid method: {}", static_cast<uint8_t>(method)));
+            throw errors::HttpClientError(fmt::format("Invalid method: {}", static_cast<uint8_t>(method)));
         }
         if (uri.path.empty()) {
             uri.path = "/";
         }
         if (!uri.query.empty()) {
-            uri.path += fmt::format("?{}", uri.query);
+            // Convert the query to a string.
+            uri.path += "?";
+            uri.path += std::accumulate(
+                uri.query.begin(), uri.query.end(), std::string {}, [](std::string acc, const auto& pair) {
+                    if (!acc.empty()) {
+                        acc += "&";
+                    }
+                    acc += fmt::format("{}={}", pair.first, pair.second);
+                    return acc;
+                });
         }
         if (!uri.fragment.empty()) {
             uri.path += fmt::format("#{}", uri.fragment);
@@ -79,7 +79,7 @@ struct Client::Impl : ssl::Client {
         if (uri.port == HTTP_PORT || uri.port == HTTPS_PORT) {
             line += fmt::format("Host: {}\r\n", uri.host);
         } else {
-            line += fmt::format("Host: {}:{}\r\n", uri.host, uri.port);
+            line += fmt::format("Host: {}:{}\r\n", uri.host, uri.port.value());
         }
         for (const auto& [key, value] : headers) {
             line += fmt::format("{}: {}\r\n", key, value);
@@ -109,7 +109,7 @@ struct Client::Impl : ssl::Client {
         return receive();
     }
 
-    ssl::Client& ssl() { return reinterpret_cast<ssl::Client&>(*this); }
+    [[nodiscard]] ssl::Client& ssl() { return static_cast<ssl::Client&>(*this); }
 
 private:
     static void parse_chunked(std::string& body)
@@ -172,13 +172,13 @@ private:
         auto end_of_status_line = response.find("\r\n");
 
         if (end_of_status_line == std::string::npos) {
-            throw errors::HTTPClientError(fmt::format("Invalid status line: {}", response));
+            throw errors::HttpClientError(fmt::format("Invalid status line: {}", response));
         }
 
         // Split the status line into status code and status message.
         auto status_line = util::split(response.substr(0, end_of_status_line), " ");
         if (!util::is_number(status_line[1])) {
-            throw errors::HTTPClientError(fmt::format("Invalid status code: {}", status_line[1]));
+            throw errors::HttpClientError(fmt::format("Invalid status code: {}", status_line[1]));
         }
 
         res.status_code = static_cast<uint16_t>(std::stoul(status_line[1]));
@@ -283,14 +283,14 @@ private:
 
 #define DEFINE_HTTP_FUNCTION(name, method)                                                                             \
     Response Client::name(                                                                                             \
-        const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb)  \
+        std::string_view url, const Headers& headers, std::string_view body, bool stream, const BodyCallback& cb)      \
     {                                                                                                                  \
         return request(Method::method, url, headers, body, true, stream, cb);                                          \
     }
 
 #define DEFINE_OUTSIDE_FUNCTION(name, method)                                                                          \
     Response name(                                                                                                     \
-        const std::string& url, const Headers& headers, const std::string& body, bool stream, const BodyCallback& cb)  \
+        std::string_view url, const Headers& headers, std::string_view body, bool stream, const BodyCallback& cb)      \
     {                                                                                                                  \
         return request(Method::method, url, headers, body, stream, cb);                                                \
     }
@@ -304,8 +304,8 @@ DEFINE_OUTSIDE_FUNCTION(connect, CONNECT)
 DEFINE_OUTSIDE_FUNCTION(trace, TRACE)
 DEFINE_OUTSIDE_FUNCTION(patch, PATCH)
 
-Response request(const Method& method, const std::string& url, const Headers& headers, const std::string& body,
-    bool stream, const BodyCallback& cb)
+Response request(const Method& method, std::string_view url, const Headers& headers, std::string_view body, bool stream,
+    const BodyCallback& cb)
 {
     return Client().request(method, url, headers, body, false, stream, cb);
 }
@@ -334,7 +334,7 @@ DEFINE_HTTP_FUNCTION(connect, CONNECT)
 DEFINE_HTTP_FUNCTION(trace, TRACE)
 DEFINE_HTTP_FUNCTION(patch, PATCH)
 
-Response Client::request(const Method& method, const std::string& url, const Headers& headers, std::string_view body,
+Response Client::request(const Method& method, std::string_view url, const Headers& headers, std::string_view body,
     bool keep_alive, bool stream, const BodyCallback& cb) const
 {
     return m_impl->request(method, url, headers, body, keep_alive, stream, cb);

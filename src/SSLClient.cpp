@@ -1,6 +1,6 @@
 #include <atomic>
-#include <ekisocket/SSLClient.hpp>
 #include <ekisocket/Socket.hpp>
+#include <ekisocket/SslClient.hpp>
 #include <ekisocket/Util.hpp>
 #include <fmt/format.h>
 #include <mutex>
@@ -60,7 +60,7 @@ std::string get_errno_string()
     return ret;
 }
 
-[[noreturn]] void print_errors_and_throw(const std::string& message, bool use_ssl, bool print_errno = true)
+[[noreturn]] void print_errors_and_throw(std::string_view message, bool use_ssl, bool print_errno = true)
 {
     const auto bio = UniqueSSLPtr<BIO>(BIO_new(BIO_s_mem()));
     ERR_print_errors(bio.get());
@@ -80,7 +80,7 @@ std::string get_errno_string()
         message, use_ssl ? fmt::format("OpenSSL Error: {}\n", err_str) : "",
         print_errno ? fmt::format("Socket Error: {}\n", get_errno_string()) : "");
 
-    throw ekisocket::errors::SSLClientError(combined_msg);
+    throw ekisocket::errors::SslClientError(combined_msg);
 }
 
 SSL* get_ssl(BIO* bio)
@@ -193,8 +193,8 @@ struct Client::Impl {
     {
         try {
             close();
-        } catch (const errors::SSLClientError& e) {
-            fmt::print(stderr, "Error closing SSLClient connection: {}\n", e.what());
+        } catch (const errors::SslClientError& e) {
+            fmt::print(stderr, "Error closing SslClient connection: {}\n", e.what());
         }
         // When there are no more SSL instances, we must shutdown winsock if using windows.
         if (--ssl_client_count == 0) {
@@ -360,10 +360,13 @@ struct Client::Impl {
         // If the length of our message is greater than the max value of an int, we cannot guarantee that we can send it
         // all.
         if (message.length() > static_cast<size_t>((std::numeric_limits<int>::max)())) {
-            throw errors::SSLClientError("Message too long to send. Please split it into smaller messages.");
+            throw errors::SslClientError("Message too long to send. Please split it into smaller messages.");
         }
         if (!m_connected) {
             print_errors_and_throw("Not connected.", m_use_ssl);
+        }
+        if (!query(false, true)) {
+            return 0;
         }
 
         const auto ret = BIO_write(m_context.bio.get(), message.data(), static_cast<int>(message.length()));
@@ -389,11 +392,13 @@ struct Client::Impl {
     std::string receive(size_t buf_size = 4096)
     {
         if (buf_size > static_cast<size_t>((std::numeric_limits<int>::max)())) {
-            throw errors::SSLClientError("Buffer size too large to receive. Please split it into smaller buffers.");
+            throw errors::SslClientError("Buffer size too large to receive. Please split it into smaller buffers.");
         }
         if (!m_connected) {
             print_errors_and_throw("Not connected.", m_use_ssl);
         }
+
+        (void)query(true, false);
 
         auto* bio = m_context.bio.get();
         if (bio == nullptr) {
@@ -405,11 +410,11 @@ struct Client::Impl {
 
         if (len == 0 && !BIO_should_retry(m_context.bio.get())) {
             m_connected = false;
-            return "";
+            return {};
         }
         if (len <= 0) {
             if (BIO_should_retry(m_context.bio.get())) {
-                return "";
+                return {};
             }
             print_errors_and_throw("Error receiving data.", m_use_ssl);
         }
@@ -460,7 +465,7 @@ struct Client::Impl {
             shutdown(sfd, SHUT_WR);
 #endif
             const auto old_timeout = m_timeout.load();
-            m_timeout.store(-1);
+            set_blocking(false);
 
             while (m_connected) {
                 receive();

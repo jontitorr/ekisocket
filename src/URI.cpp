@@ -1,192 +1,179 @@
 #include <algorithm>
-#include <ekisocket/URI.hpp>
+#include <ekisocket/Uri.hpp>
 #include <fmt/format.h>
-#include <optional>
 
-namespace ekisocket::http {
-URI URI::parse(const std::string& uri)
+namespace {
+inline size_t find_or_else(std::string_view str, char c, size_t default_value)
 {
-    URI u {};
-    if (!u.parse_scheme(uri)) {
-        return u;
+    auto pos = str.find(c);
+    return pos == std::string_view::npos ? default_value : pos;
+}
+
+inline char get_safe_char(std::string_view str, size_t index, char default_value = '\0')
+{
+    return index < str.length() ? str[index] : default_value;
+}
+
+inline std::pair<std::string_view, std::string_view> split_at(std::string_view str, size_t index)
+{
+    return { str.substr(0, index), str.substr(index) };
+}
+
+std::string to_lowercase(std::string_view str)
+{
+    std::string ret(str);
+    std::transform(ret.begin(), ret.end(), ret.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
+    return ret;
+}
+
+void parse_authority(ekisocket::http::Uri& uri_struct, std::string_view authority)
+{
+    // Look for a '@', which indicates the presence of user information.
+    const auto user_info_end = authority.find('@');
+
+    if (user_info_end != std::string::npos) {
+        // Split the authority into the user information and the host.
+        const auto user_info = authority.substr(0, user_info_end);
+
+        // Split the user information into the username and password.
+        const auto username_end = user_info.find(':');
+
+        if (username_end != std::string::npos) {
+            uri_struct.username = std::string(user_info.substr(0, username_end));
+            uri_struct.password = std::string(user_info.substr(username_end + 1));
+        } else {
+            uri_struct.username = std::string(user_info);
+        }
     }
 
-    const auto& scheme = u.scheme;
+    const auto user_info_end_plus = user_info_end == std::string::npos ? 0 : user_info_end + 1;
+    std::string_view port_str {};
+
+    // If the authority at index user_info_end_plus is a '[' then we have an IPv6 address.
+    if (get_safe_char(authority, user_info_end_plus) == '[') {
+        // Find the end of the IPv6 address.
+        const auto ipv6_end = find_or_else(authority.substr(user_info_end_plus), ']', authority.length());
+
+        uri_struct.host = to_lowercase(authority.substr(user_info_end_plus + 1, ipv6_end - 1));
+
+        // If the authority at index ipv6_end + 1 is a ':' then we have a port.
+        if (get_safe_char(authority, user_info_end_plus + ipv6_end + 1) == ':') {
+            port_str = authority.substr(user_info_end_plus + ipv6_end + 2);
+        }
+    } else {
+        // Find the end of the host.
+        auto host_end = authority.substr(user_info_end_plus).find(':');
+        if (host_end == std::string::npos) {
+            host_end = authority.length();
+        } else {
+            host_end += user_info_end_plus;
+        }
+
+        uri_struct.host = to_lowercase(authority.substr(user_info_end_plus, host_end - user_info_end_plus));
+        port_str = authority.substr(host_end);
+    }
+
+    // Remove colon from port string, if present.
+    if (port_str.starts_with(':')) {
+        port_str.remove_prefix(1);
+    }
+
+    uri_struct.port = port_str.empty()
+        ? std::nullopt
+        : std::optional<uint16_t>(static_cast<uint16_t>(std::stoul(std::string(port_str))));
+}
+} // namespace
+
+namespace ekisocket::http {
+Uri Uri::parse(std::string_view url)
+{
+    Uri uri_struct {};
+
+    // Parse the scheme.
+
+    const auto scheme_end = std::invoke([&uri_struct, &url]() {
+        bool scheme_found {};
+        size_t ret {};
+
+        const auto is_double_slash
+            = [&url](const auto i) { return get_safe_char(url, i) == '/' && get_safe_char(url, i + 1) == '/'; };
+
+        for (size_t i {}; const auto& c : url) {
+            if (c == '/') {
+                if (is_double_slash(i) && scheme_found) {
+                    uri_struct.scheme = to_lowercase(url.substr(0, ret - 1));
+                }
+                break;
+            }
+            if (c == ':') {
+                scheme_found = true;
+                ret = i + 1;
+
+                if (!is_double_slash(i + 1)) {
+                    uri_struct.scheme = to_lowercase(url.substr(0, ret - 1));
+                    break;
+                }
+            }
+            ++i;
+        }
+
+        return ret;
+    });
+
     // Search for the end of the path, which ends either on the start of a query or a fragment.
-    auto path_end = uri.find_first_of("?#", scheme.length() + 1);
-    auto authority_and_path = uri.substr(scheme.length() + 1, path_end - (scheme.length() + 1));
-    auto query_and_or_fragment = uri.substr(authority_and_path.length() + scheme.length() + 1);
+    // Look for the path end, by searching for either a '?' or a '#', starting from the index of the scheme's end.
+
+    const auto path_end = std::invoke([&url] {
+        auto ret = url.find_first_of("?#");
+        return ret == std::string::npos ? url.length() : ret;
+    });
+    auto authority_and_path = url.substr(scheme_end, path_end - scheme_end);
+    const auto query_and_fragment = url.substr(authority_and_path.length() + scheme_end);
+    bool has_authority {};
 
     // Split off the authority marker if it is still present.
     if (authority_and_path.starts_with("//")) {
-        // Remove the authority marker.
-        authority_and_path.erase(0, 2);
-        // Separate authority from path.
-        auto authority_end = authority_and_path.find('/');
-        if (authority_end == std::string::npos) {
-            authority_end = authority_and_path.length();
-        }
-        auto authority = authority_and_path.substr(0, authority_end);
-        // Parse the authority.
-        u.parse_authority(authority);
-        u.path = authority_and_path.substr(authority.length());
+        has_authority = true;
+        authority_and_path.remove_prefix(2);
+    }
+    if (has_authority) {
+        // Look for the end of the authority, which ends on the start of the path.
+        const auto authority_end = find_or_else(authority_and_path, '/', authority_and_path.length());
+
+        const auto authority = authority_and_path.substr(0, authority_end);
+        parse_authority(uri_struct, authority);
+        uri_struct.path = std::string(authority_and_path.substr(authority_end));
+
+    } else {
+        // If there is no authority, then the path is the entire string.
+        uri_struct.path = std::string(authority_and_path);
     }
 
-    // Split the query and/or fragment.
-    auto fragment_end = query_and_or_fragment.find('#');
-    if (fragment_end == std::string::npos) {
-        fragment_end = query_and_or_fragment.length();
-    }
+    auto [query, fragment]
+        = split_at(query_and_fragment, find_or_else(query_and_fragment, '#', query_and_fragment.length()));
 
-    u.query = query_and_or_fragment.substr(0, fragment_end);
-
-    // Remove '?' if present
-    if (u.query.starts_with('?')) {
-        u.query.erase(0, 1);
-    }
-
-    u.fragment = query_and_or_fragment.substr(fragment_end);
-
-    // Remove '#' if present
-    if (u.fragment.starts_with('#')) {
-        u.fragment.erase(0, 1);
-    }
-    return u;
-}
-
-void URI::add_query_parameter(const std::string& key, const std::string& value)
-{
-    if (!query.empty()) {
-        query += '&';
-    }
-    query += fmt::format("{}={}", key, value);
-}
-
-void URI::add_query_parameters(const QueryParams& params)
-{
-    for (const auto& [key, value] : params) {
-        add_query_parameter(key, value);
-    }
-}
-
-std::string URI::to_string() const
-{
-    std::string str = fmt::format("{}://", scheme);
-
-    if (!username.empty()) {
-        str += username;
-        if (!password.empty()) {
-            str += fmt::format(":{}", password);
-        }
-        str += "@";
-    }
-
-    str += host;
-
-    if (port != 0) {
-        str += fmt::format(":{}", port);
-    }
-
-    str += path;
-
-    if (!query.empty()) {
-        str += fmt::format("?{}", query);
-    }
+    // Because fragment could be empty, we need to check if it is empty.
     if (!fragment.empty()) {
-        str += fmt::format("#{}", fragment);
-    }
-    return str;
-}
-
-bool URI::parse_scheme(const std::string& str)
-{
-    // Look for a '/', since searching for a colon can be found in other places besides the scheme.
-    auto hierachical_start = str.find('/');
-
-    if (hierachical_start == std::string::npos) {
-        hierachical_start = str.length();
+        uri_struct.fragment = std::string(fragment.substr(1));
     }
 
-    // The scheme ends until the first ':'.
-    size_t scheme_end {};
+    // Parse the query.
 
-    while (scheme_end < hierachical_start) {
-        if (str[scheme_end] == ':') {
-            break;
+    // Remove the ? from the query, if it is present.
+    if (query.starts_with('?')) {
+        query.remove_prefix(1);
+    }
+    if (!query.empty()) {
+        const auto query_parameters = util::split(query, "&");
+
+        for (const auto& query_parameter : query_parameters) {
+            const auto [key, value]
+                = split_at(query_parameter, find_or_else(query_parameter, '=', query_parameter.length()));
+
+            uri_struct.query.try_emplace(std::string(key), value.starts_with('=') ? value.substr(1) : value);
         }
-        if (scheme_end == (hierachical_start - 1)) {
-            return false;
-        }
-        ++scheme_end;
     }
 
-    scheme = str.substr(0, scheme_end);
-    std::transform(
-        scheme.begin(), scheme.end(), scheme.begin(), [](uint8_t c) { return static_cast<char>(std::tolower(c)); });
-    return true;
-}
-
-bool URI::parse_authority(const std::string& str)
-{
-    // Look for a '@', which indicates the presence of user information.
-    std::optional<size_t> user_info_end = str.find('@');
-
-    if (user_info_end == std::string::npos) {
-        // No user information. (This is fine as it is optional.)
-        user_info_end = std::nullopt;
-    } else {
-        size_t username_end {};
-
-        for (username_end = 0; username_end < user_info_end; ++username_end) {
-            if (str[username_end] == ':') {
-                break;
-            }
-            if (username_end == (user_info_end.value() - 1)) {
-                return false;
-            }
-        }
-
-        username = str.substr(0, username_end);
-        password = str.substr(username_end + 1, user_info_end.value() - (username_end + 1));
-    }
-
-    std::string port_str {};
-    const auto user_info_end_plus = [&user_info_end](size_t n) {
-        if (user_info_end.has_value()) {
-            return user_info_end.value() + n;
-        }
-        return static_cast<size_t>(-1 + n);
-    };
-
-    if (str[user_info_end_plus(1)] == '[') {
-        // Search for the end of the IPv6 address.
-        auto ipv6_end = str.find(']', user_info_end_plus(2));
-        if (ipv6_end == std::string::npos) {
-            return false;
-        }
-
-        // Get the IPv6 address.
-        host = str.substr(user_info_end_plus(2), ipv6_end - user_info_end_plus(2));
-        // Get the port.
-        port_str = str.substr(ipv6_end + 1); // is null terminator at worst.
-    } else {
-        // Search for the end of the hostname.
-        auto hostname_end = str.find(':', user_info_end_plus(1));
-        if (hostname_end == std::string::npos) {
-            hostname_end = str.length();
-        }
-        // Get the hostname.
-        host = str.substr(user_info_end_plus(1), hostname_end - user_info_end_plus(1));
-        // Get the port.
-        port_str = str.substr(hostname_end); // is null terminator at worst.
-    }
-
-    // Remove colon from port if it has one.
-    if (port_str.starts_with(':')) {
-        port_str.erase(0, 1);
-    }
-
-    port = port_str.empty() ? 0 : static_cast<uint16_t>(std::stoul(port_str));
-    return true;
+    return uri_struct;
 }
 } // namespace ekisocket::http

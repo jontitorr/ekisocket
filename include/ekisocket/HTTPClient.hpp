@@ -1,19 +1,17 @@
 #pragma once
-#include <ekisocket/SSLClient.hpp>
-#include <ekisocket/URI.hpp>
+#include <ekisocket/SslClient.hpp>
+#include <ekisocket/Uri.hpp>
 #include <functional>
-
-#define DECLARE_HTTP_METHOD(name, method)                                                                              \
-    [[nodiscard]] EKISOCKET_EXPORT Response name(const std::string& url, const Headers& headers = {},                  \
-        const std::string& body = {}, bool stream = false, const BodyCallback& cb = {});
 
 namespace ekisocket {
 namespace ssl {
     class Client;
-}
+} // namespace ssl
+
 namespace ws {
     class Client;
 } // namespace ws
+
 namespace http {
     /// All the HTTP methods.
     enum class Method : uint8_t { GET, POST, PUT, DELETE_, HEAD, OPTIONS, CONNECT, TRACE, PATCH };
@@ -44,15 +42,24 @@ namespace http {
         EKISOCKET_EXPORT Client& operator=(Client&&) noexcept;
         EKISOCKET_EXPORT virtual ~Client();
 
-        DECLARE_HTTP_METHOD(get, GET)
-        DECLARE_HTTP_METHOD(post, POST)
-        DECLARE_HTTP_METHOD(put, PUT)
-        DECLARE_HTTP_METHOD(delete_, DELETE_)
-        DECLARE_HTTP_METHOD(head, HEAD)
-        DECLARE_HTTP_METHOD(options, OPTIONS)
-        DECLARE_HTTP_METHOD(connect, CONNECT)
-        DECLARE_HTTP_METHOD(trace, TRACE)
-        DECLARE_HTTP_METHOD(patch, PATCH)
+        [[nodiscard]] EKISOCKET_EXPORT Response get(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response post(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response put(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response delete_(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response head(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response options(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response connect(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response trace(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+        [[nodiscard]] EKISOCKET_EXPORT Response patch(std::string_view, const Headers& headers = {},
+            std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
 
         /**
          * @brief Sends an HTTP Request to a server, taking into consideration standard HTTP practices such as headers
@@ -68,7 +75,7 @@ namespace http {
          *
          * @return Response The response from the server.
          */
-        [[nodiscard]] EKISOCKET_EXPORT Response request(const Method& method, const std::string& url,
+        [[nodiscard]] EKISOCKET_EXPORT Response request(const Method& method, std::string_view url,
             const Headers& headers, std::string_view body, bool keep_alive = false, bool stream = false,
             const BodyCallback& cb = {}) const;
 
@@ -81,19 +88,24 @@ namespace http {
         std::unique_ptr<Impl> m_impl {};
     };
 
-#define DECLARE_OUTSIDE_FUNCTION(name)                                                                                 \
-    [[nodiscard]] EKISOCKET_EXPORT Response name(const std::string& url, const Headers& headers = {},                  \
-        const std::string& body = {}, bool stream = false, const BodyCallback& cb = {});
-
-    DECLARE_OUTSIDE_FUNCTION(get)
-    DECLARE_OUTSIDE_FUNCTION(post)
-    DECLARE_OUTSIDE_FUNCTION(put)
-    DECLARE_OUTSIDE_FUNCTION(delete_)
-    DECLARE_OUTSIDE_FUNCTION(head)
-    DECLARE_OUTSIDE_FUNCTION(options)
-    DECLARE_OUTSIDE_FUNCTION(connect)
-    DECLARE_OUTSIDE_FUNCTION(trace)
-    DECLARE_OUTSIDE_FUNCTION(patch)
+    [[nodiscard]] EKISOCKET_EXPORT Response get(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response post(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response put(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response delete_(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response head(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response options(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response connect(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response trace(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response patch(std::string_view url, const Headers& headers = {},
+        std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
 
     /**
      * @brief Sends an HTTP Request to a server, specifying the HTTP method, URL, headers, and body. If you are using a
@@ -105,7 +117,7 @@ namespace http {
      * @param body The body of the request.
      * @return Response The response from the server.
      */
-    [[nodiscard]] EKISOCKET_EXPORT Response request(const Method& method, const std::string& url,
-        const Headers& headers = {}, const std::string& body = {}, bool stream = false, const BodyCallback& cb = {});
+    [[nodiscard]] EKISOCKET_EXPORT Response request(const Method& method, std::string_view url,
+        const Headers& headers = {}, std::string_view body = {}, bool stream = false, const BodyCallback& cb = {});
 } // namespace http
 } // namespace ekisocket
