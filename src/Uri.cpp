@@ -91,7 +91,7 @@ Uri Uri::parse(std::string_view url)
 
     // Parse the scheme.
 
-    const auto scheme_end = std::invoke([&uri_struct, &url]() {
+    const auto scheme_end = ([&uri_struct, &url]() {
         bool scheme_found {};
         size_t ret {};
 
@@ -118,15 +118,15 @@ Uri Uri::parse(std::string_view url)
         }
 
         return ret;
-    });
+    })();
 
     // Search for the end of the path, which ends either on the start of a query or a fragment.
     // Look for the path end, by searching for either a '?' or a '#', starting from the index of the scheme's end.
 
-    const auto path_end = std::invoke([&url] {
+    const auto path_end = ([&url] {
         auto ret = url.find_first_of("?#");
         return ret == std::string::npos ? url.length() : ret;
-    });
+    })();
     auto authority_and_path = url.substr(scheme_end, path_end - scheme_end);
     const auto query_and_fragment = url.substr(authority_and_path.length() + scheme_end);
     bool has_authority {};
