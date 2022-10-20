@@ -553,9 +553,14 @@ private:
         if (m_status.load() == Status::CLOSED) {
             return;
         }
+
+        ssl().set_blocking(false);
+
         if (auto data = ssl().receive(); !data.empty()) {
             process_data(data);
         }
+
+        ssl().set_blocking(true);
 
         {
             // Check if we should close the connection.
