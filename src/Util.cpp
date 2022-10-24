@@ -359,6 +359,33 @@ const std::unordered_map<std::string_view, std::string_view> CONTENT_TYPES {
     { "yml"sv, "text/yaml"sv },
     { "zip"sv, "application/zip"sv },
 };
+
+constexpr const char* BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string encode_triple(uint32_t triple, uint8_t num_of_bits)
+{
+    uint8_t shift {};
+    uint8_t chunk {};
+
+    std::string result {};
+    result.reserve(num_of_bits / 8);
+
+    while (num_of_bits != 0) {
+        // If we have more than 6 bits, we can use the last 6 bits of the triple.
+        if (num_of_bits >= 6) {
+            shift = num_of_bits - 6;
+            chunk = (triple >> shift) & 0x3f;
+            result += BASE64_CHARS[chunk];
+            num_of_bits -= static_cast<uint8_t>(6);
+        } else { // We don't have three bytes, so we have to pad the last byte.
+            chunk = (triple << (6 - num_of_bits)) & 0x3f;
+            result += BASE64_CHARS[chunk];
+            num_of_bits = 0;
+        }
+    }
+
+    return result;
+}
 } // namespace
 
 namespace ekisocket::util {
@@ -389,7 +416,7 @@ std::string base64_encode(const uint8_t* input, size_t len)
     uint32_t triple {};
 
     // For every three bytes, concatenate them into 24 bits.
-    for (size_t i = 0; i < total; i += 3) { // Guaranteed to pass the last triple.
+    for (size_t i {}; i < total; i += 3) { // Guaranteed to pass the last triple.
         if (i + 2 < (total - padding)) {
             triple |= input[i + 2];
             ++num_of_bytes;
@@ -407,7 +434,7 @@ std::string base64_encode(const uint8_t* input, size_t len)
         triple = 0;
     }
     // Append the padding characters.
-    for (size_t i = 0; i < padding; ++i) {
+    for (size_t i {}; i < padding; ++i) {
         encoded += '=';
     }
     return encoded;
@@ -435,35 +462,6 @@ std::string compute_accept(const std::string& key)
     return base64_encode(hash.data(), SHA_DIGEST_LENGTH);
 }
 
-std::string encode_triple(uint32_t triple, uint8_t num_of_bits)
-{
-    uint8_t shift {};
-    uint8_t chunk {};
-
-    std::string result {};
-    result.reserve(num_of_bits / 8);
-
-    while (num_of_bits != 0) {
-        // If we have more than 6 bits, we can use the last 6 bits of the triple.
-        if (num_of_bits >= 6) {
-            shift = num_of_bits - 6;
-            chunk = (triple >> shift) & 0x3f;
-            result += get_base64_char(chunk);
-            num_of_bits -= static_cast<uint8_t>(6);
-        } else { // We don't have three bytes, so we have to pad the last byte.
-            chunk = (triple << (6 - num_of_bits)) & 0x3f;
-            result += get_base64_char(chunk);
-            num_of_bits = 0;
-        }
-    }
-
-    return result;
-}
-
-static constexpr const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-char get_base64_char(uint8_t c) { return base64_chars[c]; }
-
 std::string get_random_base64_from(uint32_t source_len)
 {
     std::string ret {};
@@ -481,11 +479,11 @@ std::string get_random_base64_from(uint32_t source_len)
     std::uniform_int_distribution<uint16_t> dis(0, 63);
 
     // Append the random characters.
-    for (uint32_t i = 0; i < reserved_bytes - padding; ++i) {
-        ret += get_base64_char(static_cast<uint8_t>(dis(gen)));
+    for (uint32_t i {}; i < reserved_bytes - padding; ++i) {
+        ret += BASE64_CHARS[static_cast<uint8_t>(dis(gen))];
     }
     // Append missing padding characters.
-    for (uint32_t i = 0; i < padding; ++i) {
+    for (uint32_t i {}; i < padding; ++i) {
         ret += '=';
     }
 
@@ -505,7 +503,7 @@ bool iequals(const std::string& a, const std::string& b)
     if (a.length() != b.length()) {
         return false;
     }
-    for (size_t i = 0; i < a.length(); ++i) {
+    for (size_t i {}; i < a.length(); ++i) {
         if (std::tolower(a[i]) != std::tolower(b[i])) {
             return false;
         }
@@ -546,7 +544,7 @@ std::string join(const std::vector<std::string>& v, std::string_view delimiter)
 {
     std::string ret {};
 
-    for (size_t i = 0; i < v.size(); ++i) {
+    for (size_t i {}; i < v.size(); ++i) {
         ret += v[i];
         if (i != v.size() - 1) {
             ret += delimiter;
@@ -574,7 +572,7 @@ std::string create_boundary()
     std::uniform_int_distribution dis(32, 127);
 
     // 3.  Append the character to the string.
-    for (size_t i = 0; i < rng; ++i) {
+    for (size_t i {}; i < rng; ++i) {
         ret += static_cast<char>(dis(gen));
     }
 

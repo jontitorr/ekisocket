@@ -150,6 +150,19 @@ void verify_the_certificate(SSL const* ssl, [[maybe_unused]] std::string_view ex
     // because we set it up in main().
 #endif
 }
+
+template <class T, class U> constexpr bool cmp_equal(T t, U u) noexcept
+{
+    using UT = std::make_unsigned_t<T>;
+    using UU = std::make_unsigned_t<U>;
+    if constexpr (std::is_signed_v<T> == std::is_signed_v<U>) {
+        return t == u;
+    } else if constexpr (std::is_signed_v<T>) {
+        return t < 0 ? false : UT(t) == u;
+    } else {
+        return u < 0 ? false : t == UU(u);
+    }
+}
 } // namespace
 
 namespace ekisocket::ssl {
@@ -272,7 +285,7 @@ struct Client::Impl {
             const auto sfd
                 = BIO_socket(BIO_ADDRINFO_family(ai), BIO_ADDRINFO_socktype(ai), BIO_ADDRINFO_protocol(ai), 0);
 
-            if (sfd == INVALID_SOCKET) {
+            if (cmp_equal(sfd, INVALID_SOCKET)) {
                 continue;
             }
 
@@ -285,11 +298,11 @@ struct Client::Impl {
             if (BIO_connect(
                     sfd, BIO_ADDRINFO_address(ai), m_use_udp ? BIO_SOCK_NONBLOCK : BIO_SOCK_NODELAY | BIO_SOCK_NONBLOCK)
                     == 0
-                && !(SOCKET_ERRNO_CONDITION || socketerrno == 0)) {
+                && !SOCKET_ERRNO_CONDITION && socketerrno != 0) {
                 BIO_closesocket(sfd);
                 continue;
             }
-            if (sfd == INVALID_SOCKET) {
+            if (cmp_equal(sfd, INVALID_SOCKET)) {
                 print_errors_and_throw("Unable to connect to host.", m_use_ssl);
             }
 

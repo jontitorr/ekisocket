@@ -5,8 +5,20 @@
 #include <unordered_map>
 
 namespace {
-constexpr uint16_t HTTP_PORT = 80;
-constexpr uint16_t HTTPS_PORT = 443;
+constexpr uint16_t HTTP_PORT { 80 };
+constexpr uint16_t HTTPS_PORT { 443 };
+
+const std::unordered_map<ekisocket::http::Method, std::string> METHODS {
+    { ekisocket::http::Method::GET, "GET" },
+    { ekisocket::http::Method::POST, "POST" },
+    { ekisocket::http::Method::PUT, "PUT" },
+    { ekisocket::http::Method::DELETE_, "DELETE" },
+    { ekisocket::http::Method::HEAD, "HEAD" },
+    { ekisocket::http::Method::OPTIONS, "OPTIONS" },
+    { ekisocket::http::Method::CONNECT, "CONNECT" },
+    { ekisocket::http::Method::TRACE, "TRACE" },
+    { ekisocket::http::Method::PATCH, "PATCH" },
+};
 } // namespace
 
 namespace ekisocket::http {
@@ -51,7 +63,7 @@ struct Client::Impl : ssl::Client {
             }
             m_connected_to = std::move(requested_server);
         }
-        if (!m_methods.contains(method)) {
+        if (!METHODS.contains(method)) {
             throw errors::HttpClientError(fmt::format("Invalid method: {}", static_cast<uint8_t>(method)));
         }
         if (uri.path.empty()) {
@@ -73,7 +85,7 @@ struct Client::Impl : ssl::Client {
             uri.path += fmt::format("#{}", uri.fragment);
         }
 
-        const auto& method_str = m_methods.at(method);
+        const auto& method_str = METHODS.at(method);
         auto line = fmt::format("{} {} {}\r\n", method_str, uri.path, "HTTP/1.1");
 
         if (uri.port == HTTP_PORT || uri.port == HTTPS_PORT) {
@@ -116,7 +128,7 @@ private:
     {
         std::string new_body {};
 
-        for (size_t i = 0; i < body.length(); i += 2) {
+        for (size_t i {}; i < body.length(); i += 2) {
             // If we have reached the end of the chunked body, we are done.
             if (body[i] == '0' && body[i + 1] == '\r' && body[i + 2] == '\n' && body[i + 3] == '\r'
                 && body[i + 4] == '\n') {
@@ -271,8 +283,6 @@ private:
         return res;
     }
 
-    /// Map containing all the supported HTTP Methods.
-    static const std::unordered_map<Method, std::string> m_methods;
     /// Used for keeping track of the currently connected to server.
     std::string m_connected_to {};
     /// Used for determining whether or not to stream the response.
@@ -309,11 +319,6 @@ Response request(const Method& method, std::string_view url, const Headers& head
 {
     return Client().request(method, url, headers, body, false, stream, cb);
 }
-
-std::unordered_map<Method, std::string> const Client::Impl::m_methods { { Method::GET, "GET" },
-    { Method::POST, "POST" }, { Method::PUT, "PUT" }, { Method::DELETE_, "DELETE" }, { Method::HEAD, "HEAD" },
-    { Method::OPTIONS, "OPTIONS" }, { Method::CONNECT, "CONNECT" }, { Method::TRACE, "TRACE" },
-    { Method::PATCH, "PATCH" } };
 
 Client::Client()
     : m_impl { std::make_unique<Client::Impl>() }

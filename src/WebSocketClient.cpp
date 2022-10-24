@@ -31,7 +31,7 @@ struct WSFrame {
 
 void mask_payload(std::string& payload, uint32_t masking_key, uint8_t start = 0)
 {
-    for (size_t i = 0; i < payload.size() - start; ++i) {
+    for (size_t i {}; i < payload.size() - start; ++i) {
         auto j = i % 4;
         // If j is 0, it represents the masking_key shifted by 24 bits (Octet 0).
         // If j is 1, it represents the masking_key shifted by 16 bits (Octet 1).
@@ -161,11 +161,13 @@ struct Client::Impl : http::Client {
 
     void close(uint16_t code = 1000, std::string_view reason = {})
     {
-        if (const auto status = m_status.load(); status == Status::CLOSING || status == Status::CLOSED) {
+        using enum ekisocket::ws::Status;
+
+        if (const auto status = m_status.load(); status == CLOSING || status == CLOSED) {
             return;
         }
 
-        m_status = Status::CLOSING;
+        m_status = CLOSING;
 
         // The message to send with this frame is the close code occupies 2 bytes, and the reason for closing can occupy
         // the rest.
@@ -235,7 +237,7 @@ private:
      */
     void disconnect(const Message& close_message)
     {
-        if (const auto status = m_status.load(); !(status == Status::OPEN || status == Status::CLOSING)) {
+        if (const auto status = m_status.load(); status != Status::OPEN && status != Status::CLOSING) {
             return;
         }
 
@@ -276,7 +278,7 @@ private:
      */
     bool send_data(const Opcode& opcode, std::string_view data)
     {
-        if (const auto status = m_status.load(); !(status == Status::OPEN || status == Status::CLOSING)) {
+        if (const auto status = m_status.load(); status != Status::OPEN && status != Status::CLOSING) {
             return false;
         }
 

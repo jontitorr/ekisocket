@@ -14,6 +14,7 @@ endif()
 
 if(NOT DEFINED ${PROJECT_NAME}_MASTER_PROJECT)
     set(${PROJECT_NAME}_MASTER_PROJECT OFF)
+
     if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         set(${PROJECT_NAME}_MASTER_PROJECT ON)
     endif()
@@ -60,9 +61,6 @@ target_include_directories(
 )
 
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-
-include(cmake/CompilerWarnings.cmake)
-set_project_warnings(${PROJECT_NAME})
 
 include(GenerateExportHeader)
 generate_export_header(${PROJECT_NAME})

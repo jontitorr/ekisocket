@@ -46,21 +46,6 @@ uint32_t get_random_number(uint32_t min = 0, uint32_t max = (std::numeric_limits
  * @return std::string The computed "Sec-WebSocket-Accept" header.
  */
 std::string compute_accept(const std::string& key);
-/**
- * @brief Encodes a 32-bit unsigned integer into a base64 encoded string.
- *
- * @param triple The 32-bit unsigned integer to encode.
- * @param num_of_bits The number of bits to encode.
- * @return std::string The base64 encoded string.
- */
-std::string encode_triple(uint32_t triple, uint8_t num_of_bits);
-/**
- * @brief Get the base64 char object for a certain index.
- *
- * @param c The index of the base64 char.
- * @return char The base64 char.
- */
-char get_base64_char(uint8_t c);
 
 /* ------------------ String Helper Function (not all used) ----------------- */
 
