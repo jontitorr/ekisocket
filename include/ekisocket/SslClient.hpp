@@ -78,8 +78,8 @@ public:
     /**
      * @brief Calls poll() on the underlying socket to query for the availability of read/write states.
      *
-     * @param read Whether or not to query for read availability.
-     * @param write Whether or not to query for write availability.
+     * @param want_read Whether or not to query for read availability.
+     * @param want_write Whether or not to query for write availability.
      *
      * @return bool Whether or not the socket is ready for read/write.
      */

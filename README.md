@@ -88,7 +88,7 @@ int main()
 
 ## Documentation
 
-[Documentation](https://ekisocket.xminent.com)
+[Documentation](https://xminent.github.io/ekisocket)
 
 ## Dependencies
 

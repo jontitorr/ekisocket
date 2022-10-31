@@ -1,0 +1,23 @@
+name: Build Docs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**Doxyfile"
+      - "**assets/**"
+      - "**/*.hpp"
+      - "**/docs.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: langroodi/doxygenize@v1.7.0
+        with:
+          htmloutput: ./docs/html

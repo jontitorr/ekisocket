@@ -115,6 +115,8 @@ namespace http {
      * @param url The URL to send the request to.
      * @param headers The headers to send with the request.
      * @param body The body of the request.
+     * @param stream Whether or not to stream the response.
+     * @param cb The callback to call for each chunk of data received, if data is being streamed.
      * @return Response The response from the server.
      */
     [[nodiscard]] EKISOCKET_EXPORT Response request(const Method& method, std::string_view url,
