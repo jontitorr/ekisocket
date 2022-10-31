@@ -1,0 +1,4 @@
+<map id="ekisocket::util::compute_accept" name="ekisocket::util::compute_accept">
+<area shape="rect" id="node1" title="Computes the &quot;Sec&#45;WebSocket&#45;Accept&quot; header found in the handshake response to a WebSocket connection,..." alt="" coords="5,5,163,47"/>
+<area shape="rect" id="node2" href="$namespaceekisocket_1_1util.html#af5065f8d780c8c1063de38f6889907c7" title="Encodes an input string of a certain length into a base64 encoded string." alt="" coords="211,5,360,47"/>
+</map>

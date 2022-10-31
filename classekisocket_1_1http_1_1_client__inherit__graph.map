@@ -1,0 +1,4 @@
+<map id="ekisocket::http::Client" name="ekisocket::http::Client">
+<area shape="rect" id="node1" title="Represents a client that can perform HTTP(S) requests. Really is just a collection of functions that ..." alt="" coords="5,5,151,32"/>
+<area shape="rect" id="node2" href="$structekisocket_1_1ws_1_1_client_1_1_impl.html" title=" " alt="" coords="8,80,148,121"/>
+</map>

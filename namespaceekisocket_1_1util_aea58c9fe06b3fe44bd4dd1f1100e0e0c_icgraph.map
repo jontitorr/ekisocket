@@ -1,0 +1,4 @@
+<map id="ekisocket::util::get_random_number" name="ekisocket::util::get_random_number">
+<area shape="rect" id="node1" title="Generates a random 32&#45;bit unsigned integer within a range (defaults to [0, UINT32_MAX])." alt="" coords="196,5,321,47"/>
+<area shape="rect" id="node2" href="$namespaceekisocket_1_1util.html#a52c3e6d13da580c194dcc5f4f1639cb2" title="Create a random boundary string that complies with RFC 2046." alt="" coords="5,5,148,47"/>
+</map>
