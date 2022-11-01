@@ -11,6 +11,7 @@ namespace {
 constexpr std::chrono::seconds HEARTBEAT_INTERVAL { 30 };
 constexpr std::chrono::minutes TIMEOUT_INTERVAL { 2 };
 constexpr uint8_t MAX_HEADER_LENGTH { 14 };
+
 /**
  * @brief Represents a WebSocket Data Frame. This is what is sent between the client and server. Some of the following
  * fields have been included for being correct, but left out as they are not needed/used.
@@ -355,7 +356,6 @@ private:
             data.insert(0, 1, static_cast<char>(m_leftover_byte.value()));
             m_leftover_byte = std::nullopt;
         }
-
         // If we've reached our base case or the message is genuinely too short to be considered a frame, then return.
         if (data.empty() || data.length() < 2) {
             return;
@@ -429,10 +429,8 @@ private:
         // Corresponds to the length of the frame received, which can contain more than just the payload. For example,
         // parts of another frame.
         const size_t actual_payload_len = data.length() - f.payload_start;
-
         // Our payload length can either be the extended or the normal payload length.
-        const auto expected_payload_len
-            = static_cast<size_t>(f.ext_payload_len > 0 ? f.ext_payload_len : f.payload_len);
+        const size_t expected_payload_len = f.ext_payload_len > 0 ? f.ext_payload_len : f.payload_len;
 
         if (actual_payload_len < expected_payload_len) {
             auto needed = expected_payload_len - actual_payload_len;
@@ -449,7 +447,6 @@ private:
         }
 
         std::string payload_data { data.substr(f.payload_start, expected_payload_len) };
-
         // Create a Message to dispatch to the m_on_message callback.
         Message dispatch {};
         // We do not want to send our heartbeats.

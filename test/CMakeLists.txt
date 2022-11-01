@@ -7,8 +7,8 @@ cpmfindpackage(
     Catch2
     GITHUB_REPOSITORY
     catchorg/Catch2
-    VERSION
-    2.5.0
+    GIT_TAG
+    "v3.1.1"
     OPTIONS
     "CATCH_BUILD_TESTING OFF"
     "CATCH_INSTALL_DOCS OFF"
@@ -22,7 +22,7 @@ foreach(file ${test_sources})
     add_executable(${test_name}_Tests ${file})
 
     target_link_libraries(
-        ${test_name}_Tests PUBLIC Catch2::Catch2 ${CMAKE_PROJECT_NAME}
+        ${test_name}_Tests PRIVATE Catch2::Catch2 ${CMAKE_PROJECT_NAME}
     )
 
     add_test(NAME ${test_name} COMMAND ${test_name}_Tests)
