@@ -13,6 +13,9 @@
 #ifndef _WIN32
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
 #endif
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
@@ -495,6 +498,7 @@ struct Client::Impl {
 #ifndef _WIN32
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wunused-value"
 #endif
             BIO_set_close(bio, BIO_NOCLOSE);
 #ifndef _WIN32
