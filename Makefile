@@ -6,7 +6,8 @@ docs:
 	rm -rf docs
 	doxygen
 
-install: configure
+install:
+	cmake -DCMAKE_BUILD_TYPE:String=Release -Dekisocket_BUILD_EXAMPLES:BOOL=OFF -Dekisocket_BUILD_TESTS:BOOL=OFF -S . -B build
 	cmake --build build --target install --config Release
 
 build: configure
