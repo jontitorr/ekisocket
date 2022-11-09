@@ -1,5 +1,4 @@
-#ifndef EKISOCKET_SSL_CLIENT_HPP
-#define EKISOCKET_SSL_CLIENT_HPP
+#pragma once
 #include <ekisocket/Errors.hpp>
 #include <ekisocket_export.h>
 #include <memory>
@@ -95,5 +94,3 @@ private:
     std::unique_ptr<Impl> m_impl {};
 };
 } // namespace ekisocket::ssl
-
-#endif /* EKISOCKET_SSL_CLIENT_HPP */

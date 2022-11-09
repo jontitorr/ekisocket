@@ -276,7 +276,6 @@ struct Client::Impl {
             return false;
         }
 
-        const auto host_and_port = fmt::format("{}:{}", m_hostname, m_port);
         BIO_ADDRINFO* res {};
 
         if (BIO_lookup_ex(m_hostname.c_str(), std::to_string(m_port).c_str(), BIO_LOOKUP_CLIENT, AF_INET,
