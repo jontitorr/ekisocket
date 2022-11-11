@@ -71,34 +71,26 @@ struct Client::Impl : ssl::Client {
         }
         if (!uri.query.empty()) {
             // Convert the query to a string.
-            uri.path += "?";
-            uri.path += std::accumulate(
-                uri.query.begin(), uri.query.end(), std::string {}, [](std::string acc, const auto& pair) {
-                    if (!acc.empty()) {
-                        acc += "&";
-                    }
-                    acc += fmt::format("{}={}", pair.first, pair.second);
-                    return acc;
-                });
+            uri.path += '?'
+                + std::accumulate(std::next(uri.query.begin()), uri.query.end(),
+                    fmt::format("{}={}", uri.query.begin()->first, uri.query.begin()->second),
+                    [](std::string a, const auto& pair) { return a + fmt::format("&{}={}", pair.first, pair.second); });
         }
         if (!uri.fragment.empty()) {
             uri.path += fmt::format("#{}", uri.fragment);
         }
 
-        const auto& method_str = METHODS.at(method);
-        auto line = fmt::format("{} {} {}\r\n", method_str, uri.path, "HTTP/1.1");
+        auto line = fmt::format("{} {} {}\r\n", METHODS.at(method), uri.path, "HTTP/1.1");
 
-        if (uri.port == HTTP_PORT || uri.port == HTTPS_PORT) {
-            line += fmt::format("Host: {}\r\n", uri.host);
-        } else {
-            line += fmt::format("Host: {}:{}\r\n", uri.host, uri.port.value());
-        }
+        line += uri.port == HTTPS_PORT || uri.port == HTTP_PORT
+            ? fmt::format("Host: {}\r\n", uri.host)
+            : fmt::format("Host: {}:{}\r\n", uri.host, uri.port.value());
+
         for (const auto& [key, value] : headers) {
             line += fmt::format("{}: {}\r\n", key, value);
         }
-        if (keep_alive) {
-            line += "Connection: keep-alive\r\n";
-        } else {
+
+        if (!keep_alive) {
             line += "Connection: close\r\n";
             m_connected_to.clear();
         }
@@ -151,7 +143,7 @@ private:
             // We now have the chunk size (which is always a hex number).
             const auto chunk_size = std::stoul(chunk_size_str, nullptr, 16);
 
-            new_body.reserve(chunk_size);
+            new_body.reserve(new_body.length() + chunk_size);
             new_body.append(body.substr(i, chunk_size));
             i += chunk_size;
         }
@@ -178,8 +170,10 @@ private:
 
         // We know the body would be anything after the end of the headers.
         auto body = response.substr(end_of_headers + 4);
+
         // We no longer need the body contained within the headers.
         response.resize(end_of_headers + 2);
+
         // The first occurrence of a CRLF would mark the end of the status line.
         auto end_of_status_line = response.find("\r\n");
 
@@ -188,7 +182,8 @@ private:
         }
 
         // Split the status line into status code and status message.
-        auto status_line = util::split(response.substr(0, end_of_status_line), " ");
+        auto status_line = util::split(std::string_view { response }.substr(0, end_of_status_line), " ");
+
         if (!util::is_number(status_line[1])) {
             throw errors::HttpClientError(fmt::format("Invalid status code: {}", status_line[1]));
         }
@@ -207,10 +202,12 @@ private:
             if (response[i] != ':') {
                 continue;
             }
+
             // If we have a colon, we know we are at the key.
             // We know we are at the key, so we can set the key to the string from the beginning of the response to the
             // colon.
             key = response.substr(j, i - j);
+
             // We need to skip the colon and any spaces after it.
             while (response[i] == ':' || response[i] == ' ') {
                 ++i;
@@ -223,9 +220,11 @@ private:
             while (response[i] != '\r' && response[i] != '\n') {
                 ++i;
             }
+
             // We know we are at the end of the value, so we can set the value to the string from the beginning of the
             // response to the CRLF.
             value = response.substr(j, i - j);
+
             // If we received a body.
             if (util::iequals(key, "Content-Length")) {
                 content_length = std::stoul(value);
@@ -271,6 +270,7 @@ private:
             // If there is no end of chunk marker, we must receive until we have it.
             while (end_of_chunk == std::string::npos) {
                 const auto old_length = body.length();
+
                 body += ssl::Client::receive();
                 // We can safely skip the old length, since we know there is no end of chunk marker there.
                 end_of_chunk = body.find("0\r\n\r\n", old_length);
