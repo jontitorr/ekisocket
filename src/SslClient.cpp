@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <mutex>
 #include <optional>
+#include <span>
 
 #ifdef _WIN32
 #include <shlwapi.h>
@@ -118,7 +119,7 @@ bool load_windows_certificates(const SSL_CTX* ssl)
 
     uint32_t count {};
     while ((it = CertEnumCertificatesInStore(system_store, it)) != nullptr) {
-        X509* x509 = d2i_X509(
+        auto* x509 = d2i_X509(
             nullptr, const_cast<const unsigned char**>(&it->pbCertEncoded), static_cast<int32_t>(it->cbCertEncoded));
         if (x509 != nullptr) {
             if (X509_STORE_add_cert(ssl_store, x509) == 1) {
@@ -412,30 +413,37 @@ struct Client::Impl {
         if (!m_connected) {
             print_errors_and_throw("Not connected.", m_use_ssl);
         }
-
-        (void)query(true, false);
-
-        auto* bio = m_context.bio.get();
-        if (bio == nullptr) {
+        if (!m_context.bio) {
             print_errors_and_throw("Could not retrieve the underlying socket BIO.", m_use_ssl);
         }
 
-        std::string buffer(buf_size, '\0');
-        const auto len = BIO_read(bio, buffer.data(), static_cast<int>(buf_size));
+        size_t bytes_read {};
+        std::string ret(buf_size, '\0');
+
+        // Check if we have any pending data left in our BIO's read buffer.
+        if (const auto pending = BIO_ctrl_pending(m_context.bio.get()); pending > 0) {
+            fmt::print("Reading {} bytes from the BIO's read buffer.", pending);
+            bytes_read += BIO_read(m_context.bio.get(), ret.data(), static_cast<int>(pending));
+        }
+
+        (void)query(true, false);
+
+        const auto len = BIO_read(
+            m_context.bio.get(), std::span(ret).subspan(bytes_read).data(), static_cast<int>(buf_size - bytes_read));
 
         if (len == 0 && !BIO_should_retry(m_context.bio.get())) {
             m_connected = false;
-            return {};
+            return ret;
         }
         if (len <= 0) {
             if (BIO_should_retry(m_context.bio.get())) {
-                return {};
+                return ret;
             }
             print_errors_and_throw("Error receiving data.", m_use_ssl);
         }
 
-        buffer.resize(static_cast<size_t>(len));
-        return buffer;
+        ret.resize(static_cast<size_t>(len));
+        return ret;
     }
 
     [[nodiscard]] bool query(bool want_read = false, bool want_write = false) const
