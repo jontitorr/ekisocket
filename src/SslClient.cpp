@@ -422,7 +422,6 @@ struct Client::Impl {
 
         // Check if we have any pending data left in our BIO's read buffer.
         if (const auto pending = BIO_ctrl_pending(m_context.bio.get()); pending > 0) {
-            fmt::print("Reading {} bytes from the BIO's read buffer.", pending);
             bytes_read += BIO_read(m_context.bio.get(), ret.data(), static_cast<int>(pending));
         }
 
