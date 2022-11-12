@@ -424,7 +424,8 @@ struct Client::Impl {
         if (const auto pending = BIO_ctrl_pending(m_context.bio.get()); pending > 0) {
             bytes_read += BIO_read(m_context.bio.get(), ret.data(), static_cast<int>((std::min)(buf_size, pending)));
         }
-        if (bytes_read == buf_size) {
+        // Reads of 0 should still be allowed for disconnect discovery.
+        if (bytes_read > 0 && bytes_read == buf_size) {
             return ret;
         }
 
