@@ -248,7 +248,7 @@ private:
         }
 
         while (bytes_received < content_length) {
-            const auto chunk = ssl::Client::receive();
+            const auto chunk = ssl::Client::receive((std::max)(content_length - bytes_received, 4096ULL));
 
             if (chunk.empty()) {
                 continue;

@@ -422,13 +422,20 @@ struct Client::Impl {
 
         // Check if we have any pending data left in our BIO's read buffer.
         if (const auto pending = BIO_ctrl_pending(m_context.bio.get()); pending > 0) {
-            bytes_read += BIO_read(m_context.bio.get(), ret.data(), static_cast<int>(pending));
+            bytes_read += BIO_read(m_context.bio.get(), ret.data(), static_cast<int>((std::min)(buf_size, pending)));
+        }
+        if (bytes_read == buf_size) {
+            return ret;
         }
 
         (void)query(true, false);
 
         const auto len = BIO_read(
             m_context.bio.get(), std::span(ret).subspan(bytes_read).data(), static_cast<int>(buf_size - bytes_read));
+
+        bytes_read += (std::max)(len, 0);
+        ret.resize(bytes_read);
+        ret.shrink_to_fit();
 
         if (len == 0 && !BIO_should_retry(m_context.bio.get())) {
             m_connected = false;
@@ -441,7 +448,6 @@ struct Client::Impl {
             print_errors_and_throw("Error receiving data.", m_use_ssl);
         }
 
-        ret.resize(static_cast<size_t>(len));
         return ret;
     }
 
