@@ -1,5 +1,7 @@
 # Ekisocket
 
+**This repository has been archived. The development has been succeeded/continued in** <https://github.com/xminent/net>.
+
 A small network library written for use with my library [Ekizu](https://github.com/xminent/ekizu)
 
 ## Features
